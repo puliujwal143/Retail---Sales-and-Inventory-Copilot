@@ -150,7 +150,7 @@ if __name__ == "__main__":
     init_db(force=False)
     
     print("\n" + "="*60)
-    print("🚀 RetailIQ Sales & Inventory Copilot (PS03)")
+    print("RetailIQ Sales & Inventory Copilot (PS03)")
     print("Listening on: http://0.0.0.0:8000")
     print("Open in Browser: http://localhost:8000")
     print("="*60 + "\n")
