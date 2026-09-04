@@ -109,22 +109,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
         globalDateSelect.addEventListener("change", (e) => {
             const val = e.target.value;
-            const now = new Date();
 
             if (val === "today") {
                 state.selectedDate = null;
-                globalDatePicker.style.display = "none";
+                if (globalDatePicker) globalDatePicker.style.display = "none";
             } else if (val === "yesterday") {
-                const d = new Date("2026-09-03"); d.setDate(d.getDate() - 1);
-                state.selectedDate = d.toISOString().split("T")[0];
-                globalDatePicker.style.display = "none";
+                state.selectedDate = "2026-09-02";
+                if (globalDatePicker) globalDatePicker.style.display = "none";
             } else if (val.endsWith("d")) {
                 const days = parseInt(val.replace("d", ""));
-                const d = new Date("2026-09-03"); d.setDate(d.getDate() - days);
-                state.selectedDate = d.toISOString().split("T")[0];
-                globalDatePicker.style.display = "none";
+                state.salesTimeframe = days;
+                state.dashboardTimeframe = Math.min(180, days);
+                state.selectedDate = null;
+                if (globalDatePicker) globalDatePicker.style.display = "none";
+                const salesTimeframeSel = document.getElementById("sales-timeframe-select");
+                if (salesTimeframeSel) salesTimeframeSel.value = String(days);
             } else if (val === "custom") {
-                globalDatePicker.style.display = "inline-block";
+                if (globalDatePicker) {
+                    globalDatePicker.style.display = "inline-block";
+                    if (globalDatePicker.value) state.selectedDate = globalDatePicker.value;
+                }
                 return;
             }
             loadAllViews();
@@ -642,9 +646,12 @@ document.addEventListener("DOMContentLoaded", () => {
             const res = await fetch(url);
             const data = await res.json();
 
-            const revSum = data.revenue_trend.datasets[0].data.reduce((a, b) => a + b, 0);
-            const unitSum = data.units_trend.datasets[0].data.reduce((a, b) => a + b, 0);
-            const dailyAvg = revSum / Math.max(1, data.revenue_trend.labels.length);
+            const revTrendData = data.revenue_trend?.datasets?.[0]?.data || [];
+            const unitsTrendData = data.units_trend?.datasets?.[0]?.data || [];
+            const revSum = revTrendData.reduce((a, b) => (a || 0) + (b || 0), 0);
+            const unitSum = unitsTrendData.reduce((a, b) => (a || 0) + (b || 0), 0);
+            const labelCount = data.revenue_trend?.labels?.length || 1;
+            const dailyAvg = revSum / Math.max(1, labelCount);
 
             const salesRevEl = document.getElementById("sales-kpi-revenue");
             const salesUnitsEl = document.getElementById("sales-kpi-units");
@@ -654,23 +661,25 @@ document.addEventListener("DOMContentLoaded", () => {
             if (salesRevEl) salesRevEl.textContent = `$${revSum.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
             if (salesUnitsEl) salesUnitsEl.textContent = unitSum.toLocaleString();
             if (salesDailyEl) salesDailyEl.textContent = `$${dailyAvg.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
-            if (salesTopCatEl) salesTopCatEl.textContent = data.category_chart.labels[0] || "Computers";
+            if (salesTopCatEl) salesTopCatEl.textContent = data.category_chart?.labels?.[0] || "Computers";
 
-            renderSVGChart("chart-sales-revenue", data.revenue_trend);
-            renderSVGChart("chart-sales-units", data.units_trend);
-            renderSVGChart("chart-sales-category", data.category_chart);
-            renderSVGChart("chart-sales-top-products", data.top_products_chart);
-            renderSVGChart("chart-sales-store", data.store_chart);
+            if (data.revenue_trend) renderSVGChart("chart-sales-revenue", data.revenue_trend);
+            if (data.units_trend) renderSVGChart("chart-sales-units", data.units_trend);
+            if (data.category_chart) renderSVGChart("chart-sales-category", data.category_chart);
+            if (data.top_products_chart) renderSVGChart("chart-sales-top-products", data.top_products_chart);
+            if (data.store_chart) renderSVGChart("chart-sales-store", data.store_chart);
 
             // Fetch & Render 10-Year Yearly Performance & Seasonality Charts
             try {
-                const yearlyRes = await fetch(`/api/yearly-performance?store_id=${state.selectedStore}`);
+                let yearlyUrl = `/api/yearly-performance?store_id=${state.selectedStore}`;
+                const yearlyRes = await fetch(yearlyUrl);
                 const yearlyData = await yearlyRes.json();
                 if (yearlyData && yearlyData.yearly_chart) {
                     renderSVGChart("chart-sales-yearly", yearlyData.yearly_chart);
                 }
 
-                const seasonRes = await fetch(`/api/seasonality?store_id=${state.selectedStore}`);
+                let seasonUrl = `/api/seasonality?store_id=${state.selectedStore}`;
+                const seasonRes = await fetch(seasonUrl);
                 const seasonData = await seasonRes.json();
                 if (seasonData && seasonData.seasonality_chart) {
                     renderSVGChart("chart-sales-seasonality", seasonData.seasonality_chart);
@@ -709,7 +718,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const insightsContainer = document.getElementById("sales-insights-container");
             if (insightsContainer) {
-                insightsContainer.innerHTML = data.insights.map(ins => `
+                insightsContainer.innerHTML = (data.insights || []).map(ins => `
                     <div style="background:var(--bg-light); border-left:3px solid var(--brand-teal); padding:8px 12px; border-radius:4px; font-size:12px; margin-bottom:6px;">
                         ${ins}
                     </div>
@@ -718,6 +727,110 @@ document.addEventListener("DOMContentLoaded", () => {
 
         } catch (err) {
             console.error("Failed to load sales workspace:", err);
+        }
+    }
+
+    // SVG Chart Render Engine (Supports line, area, bar, horizontal_bar)
+    function renderSVGChart(containerId, chartSpec) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        
+        if (!chartSpec || !chartSpec.labels || chartSpec.labels.length === 0) {
+            container.innerHTML = '<div style="color:var(--text-muted); font-size:12px; padding:20px; text-align:center;">No chart data available.</div>';
+            return;
+        }
+
+        const width = container.clientWidth || 500;
+        const height = container.clientHeight || 200;
+        const padding = 35;
+
+        const type = chartSpec.type || "line";
+        const labels = chartSpec.labels;
+        const datasets = chartSpec.datasets || [];
+        if (datasets.length === 0) {
+            container.innerHTML = '<div style="color:var(--text-muted); font-size:12px; padding:20px; text-align:center;">No chart data available.</div>';
+            return;
+        }
+
+        if (type === "line" || type === "area") {
+            let maxVal = 10;
+            datasets.forEach(ds => {
+                const vals = (ds.data || []).filter(v => v !== null && v !== undefined);
+                if (vals.length > 0) {
+                    const m = Math.max(...vals);
+                    if (m > maxVal) maxVal = m;
+                }
+            });
+
+            const polylinesHTML = datasets.map(ds => {
+                const color = ds.color || "#087F80";
+                const points = (ds.data || []).map((v, i) => {
+                    if (v === null || v === undefined) return null;
+                    const x = padding + (i / Math.max(1, labels.length - 1)) * (width - 2 * padding);
+                    const y = height - padding - (v / maxVal) * (height - 2 * padding);
+                    return `${x},${y}`;
+                }).filter(p => p !== null).join(" ");
+
+                return `<polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" points="${points}" />`;
+            }).join("");
+
+            const svgHTML = `
+                <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%; overflow: hidden;">
+                    <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#E5EAF0" stroke-width="1" />
+                    <line x1="${padding}" y1="${padding}" x2="${width - padding}" y2="${padding}" stroke="#E5EAF0" stroke-dasharray="4" stroke-width="1" />
+                    ${polylinesHTML}
+                    <text x="${padding}" y="${padding - 8}" fill="#64748B" font-size="10" font-weight="600">$${Math.round(maxVal).toLocaleString()}</text>
+                    <text x="${padding}" y="${height - 6}" fill="#64748B" font-size="10">${labels[0] || ''}</text>
+                    <text x="${width - padding - 45}" y="${height - 6}" fill="#64748B" font-size="10">${labels[labels.length - 1] || ''}</text>
+                </svg>
+            `;
+            container.innerHTML = svgHTML;
+
+        } else if (type === "bar") {
+            const dataVals = datasets[0].data || [];
+            const maxVal = Math.max(...dataVals.filter(v => v !== null && v !== undefined), 10);
+            const barWidth = (width - 2 * padding) / Math.max(1, dataVals.length);
+
+            const barsHTML = dataVals.map((v, i) => {
+                const val = v || 0;
+                const barHeight = (val / maxVal) * (height - 2 * padding);
+                const x = padding + i * barWidth + barWidth * 0.15;
+                const y = height - padding - barHeight;
+                const w = Math.max(2, barWidth * 0.7);
+                return `
+                    <rect x="${x}" y="${y}" width="${w}" height="${barHeight}" fill="${datasets[0].color || '#087F80'}" rx="3" />
+                    <text x="${x + w/2}" y="${height - 6}" fill="#64748B" font-size="9" text-anchor="middle">${labels[i] ? String(labels[i]).substring(0, 8) : ''}</text>
+                `;
+            }).join("");
+
+            container.innerHTML = `
+                <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%;">
+                    <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#E5EAF0" stroke-width="1" />
+                    ${barsHTML}
+                </svg>
+            `;
+        } else if (type === "horizontal_bar") {
+            const dataVals = datasets[0].data || [];
+            const maxVal = Math.max(...dataVals.filter(v => v !== null && v !== undefined), 10);
+            const rowHeight = (height - 2 * padding) / Math.max(1, dataVals.length);
+
+            const barsHTML = dataVals.map((v, i) => {
+                const val = v || 0;
+                const barWidth = (val / maxVal) * (width - 160);
+                const y = padding + i * rowHeight + rowHeight * 0.15;
+                const h = Math.max(4, rowHeight * 0.7);
+                return `
+                    <text x="${padding}" y="${y + h/1.3}" fill="#334155" font-size="10" font-weight="600">${labels[i] ? String(labels[i]).substring(0, 18) : ''}</text>
+                    <rect x="140" y="${y}" width="${barWidth}" height="${h}" fill="${datasets[0].color || '#06b6d4'}" rx="3" />
+                    <text x="${145 + barWidth}" y="${y + h/1.3}" fill="#64748B" font-size="10" font-weight="600">$${Math.round(val).toLocaleString()}</text>
+                `;
+            }).join("");
+
+            container.innerHTML = `
+                <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%;">
+                    ${barsHTML}
+                </svg>
+            `;
         }
     }
 

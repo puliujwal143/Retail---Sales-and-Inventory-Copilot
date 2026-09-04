@@ -1,21 +1,33 @@
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Any, Optional
-from src.database import query_df, query_all
+from src.database import query_df, query_all, query_one
 
 SPIKE_THRESHOLD_PCT = 30.0  # >= +30% change is a sales spike
 DROP_THRESHOLD_PCT = -30.0   # <= -30% change is a sales drop
+
+def resolve_store_id(store_input: Optional[str]) -> Optional[str]:
+    """Resolves store name or store ID to canonical store_id string."""
+    if not store_input or str(store_input).lower() == "all":
+        return None
+    if str(store_input).startswith("STR"):
+        return str(store_input)
+    row = query_one("SELECT store_id FROM stores WHERE store_name LIKE ? OR store_id = ?", (f"%{store_input}%", store_input))
+    if row:
+        return row["store_id"]
+    return store_input
 
 def get_product_sales_trends(time_days: int = 30, store_id: Optional[str] = None) -> pd.DataFrame:
     """
     Compares sales in recent N-day period vs previous N-day period per product.
     Calculates exact percentage change and flags sales spikes / drops.
     """
+    resolved_store = resolve_store_id(store_id)
     where_clause = ""
     params = [time_days, time_days, 2 * time_days]
-    if store_id and store_id != "all":
+    if resolved_store:
         where_clause = "AND s.store_id = ?"
-        params = [time_days, store_id, time_days, 2 * time_days, store_id]
+        params = [time_days, resolved_store, time_days, 2 * time_days, resolved_store]
 
     query = f"""
     WITH max_date_cte AS (
@@ -96,11 +108,12 @@ def get_sales_drops(time_days: int = 30) -> List[Dict[str, Any]]:
 
 def get_store_performance(store_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """Returns total revenue and total units sold per store."""
+    resolved_store = resolve_store_id(store_id)
     where_clause = ""
     params = ()
-    if store_id and store_id != "all":
+    if resolved_store:
         where_clause = "WHERE st.store_id = ?"
-        params = (store_id,)
+        params = (resolved_store,)
 
     query = f"""
     SELECT 
@@ -117,13 +130,19 @@ def get_store_performance(store_id: Optional[str] = None) -> List[Dict[str, Any]
     """
     return query_all(query, params)
 
-def get_category_performance(store_id: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_category_performance(store_id: Optional[str] = None, target_date: Optional[str] = None) -> List[Dict[str, Any]]:
     """Returns sales performance broken down by product category."""
-    where_clause = ""
-    params = ()
-    if store_id and store_id != "all":
-        where_clause = "WHERE s.store_id = ?"
-        params = (store_id,)
+    resolved_store = resolve_store_id(store_id)
+    where_parts = []
+    params = []
+    if resolved_store:
+        where_parts.append("s.store_id = ?")
+        params.append(resolved_store)
+    if target_date:
+        where_parts.append("s.date <= ?")
+        params.append(target_date)
+
+    where_clause = "WHERE " + " AND ".join(where_parts) if where_parts else ""
 
     query = f"""
     SELECT 
@@ -136,20 +155,29 @@ def get_category_performance(store_id: Optional[str] = None) -> List[Dict[str, A
     GROUP BY p.category
     ORDER BY total_revenue DESC
     """
-    return query_all(query, params)
+    return query_all(query, tuple(params))
 
 def get_daily_sales_trend(days: int = 30, store_id: Optional[str] = None, target_date: Optional[str] = None) -> List[Dict[str, Any]]:
     """Returns aggregate daily/monthly revenue and volume for the N days relative to target_date (or max date)."""
+    resolved_store = resolve_store_id(store_id)
     where_parts = []
     params = []
     
-    if store_id and store_id != "all":
+    # Normalize target_date if > max_date
+    bounds = query_one("SELECT MAX(date) as max_date FROM sales")
+    max_db_date = bounds["max_date"] if bounds else "2026-09-03"
+    
+    effective_target = target_date
+    if effective_target and effective_target > max_db_date:
+        effective_target = max_db_date
+
+    if resolved_store:
         where_parts.append("s.store_id = ?")
-        params.append(store_id)
+        params.append(resolved_store)
         
-    if target_date:
+    if effective_target:
         where_parts.append("s.date <= ? AND s.date >= date(?, '-' || ? || ' days')")
-        params.extend([target_date, target_date, days])
+        params.extend([effective_target, effective_target, days])
     else:
         where_parts.append("s.date >= date((SELECT MAX(date) FROM sales), '-' || ? || ' days')")
         params.append(days)
@@ -178,8 +206,17 @@ def get_sales_analytics_charts(days: int = 30, store_id: Optional[str] = "all", 
     """
     Generates structured chart specs and deterministic insights for the Sales Analytics Workspace.
     """
+    resolved_store = resolve_store_id(store_id)
+    
+    # Normalize target_date
+    bounds = query_one("SELECT MAX(date) as max_date FROM sales")
+    max_db_date = bounds["max_date"] if bounds else "2026-09-03"
+    effective_target = target_date
+    if effective_target and effective_target > max_db_date:
+        effective_target = max_db_date
+
     # 1. Daily Trend (Revenue & Units)
-    daily = get_daily_sales_trend(days=days, store_id=store_id, target_date=target_date)
+    daily = get_daily_sales_trend(days=days, store_id=resolved_store, target_date=effective_target)
     dates = [d["date"] for d in daily]
     revenues = [d["total_revenue"] for d in daily]
     units = [d["total_units"] for d in daily]
@@ -201,7 +238,7 @@ def get_sales_analytics_charts(days: int = 30, store_id: Optional[str] = "all", 
     }
 
     # 2. Category Performance Chart
-    categories = get_category_performance(store_id=store_id)
+    categories = get_category_performance(store_id=resolved_store, target_date=effective_target)
     cat_names = [c["category"] for c in categories]
     cat_revs = [c["total_revenue"] for c in categories]
 
@@ -214,14 +251,28 @@ def get_sales_analytics_charts(days: int = 30, store_id: Optional[str] = "all", 
     }
 
     # 3. Top Products Horizontal Bar Chart
-    top_p_query = """
+    where_parts = []
+    params = []
+    if resolved_store:
+        where_parts.append("s.store_id = ?")
+        params.append(resolved_store)
+    if effective_target:
+        where_parts.append("s.date <= ? AND s.date >= date(?, '-' || ? || ' days')")
+        params.extend([effective_target, effective_target, days])
+    else:
+        where_parts.append("s.date >= date((SELECT MAX(date) FROM sales), '-' || ? || ' days')")
+        params.append(days)
+
+    where_clause = " WHERE " + " AND ".join(where_parts) if where_parts else ""
+
+    top_p_query = f"""
     SELECT p.product_name, COALESCE(SUM(s.quantity), 0) as units, ROUND(COALESCE(SUM(s.total_revenue), 0), 2) as revenue
     FROM sales s JOIN products p ON s.product_id = p.product_id
-    WHERE s.date >= date((SELECT MAX(date) FROM sales), '-' || ? || ' days')
+    {where_clause}
     GROUP BY p.product_id, p.product_name
     ORDER BY revenue DESC LIMIT 5
     """
-    top_p_data = query_all(top_p_query, (days,))
+    top_p_data = query_all(top_p_query, tuple(params))
     top_p_names = [p["product_name"] for p in top_p_data]
     top_p_revs = [p["revenue"] for p in top_p_data]
 
@@ -234,7 +285,7 @@ def get_sales_analytics_charts(days: int = 30, store_id: Optional[str] = "all", 
     }
 
     # 4. Store Performance Chart
-    stores = get_store_performance()
+    stores = get_store_performance(store_id=resolved_store)
     st_names = [s["store_name"] for s in stores]
     st_revs = [s["total_revenue"] for s in stores]
 
@@ -400,11 +451,12 @@ def get_yearly_performance(store_id: Optional[str] = "all") -> Dict[str, Any]:
     """
     Computes 10-year yearly sales performance breakdown, YoY growth %, and highlights.
     """
+    resolved_store = resolve_store_id(store_id)
     where_parts = []
     params = []
-    if store_id and store_id != "all":
+    if resolved_store:
         where_parts.append("store_id = ?")
-        params.append(store_id)
+        params.append(resolved_store)
 
     where_clause = " WHERE " + " AND ".join(where_parts) if where_parts else ""
 
@@ -421,7 +473,7 @@ def get_yearly_performance(store_id: Optional[str] = "all") -> Dict[str, Any]:
     """
     rows = query_all(sql, tuple(params))
     if not rows:
-        return {"years": [], "best_year": "N/A", "fastest_growth_year": "N/A", "lowest_year": "N/A"}
+        return {"yearly_table": [], "best_year": "N/A", "fastest_growth_year": "N/A", "lowest_year": "N/A", "yearly_chart": {"type": "bar", "title": "10-Year Revenue by Year", "labels": [], "datasets": [{"label": "Annual Revenue ($)", "data": [], "color": "#087F80"}]}}
 
     yearly_data = []
     prev_rev = None
@@ -472,11 +524,12 @@ def get_seasonality_analysis(store_id: Optional[str] = "all") -> Dict[str, Any]:
     """
     Computes average monthly revenue and units across all 10 years to identify seasonal demand spikes.
     """
+    resolved_store = resolve_store_id(store_id)
     where_parts = []
     params = []
-    if store_id and store_id != "all":
+    if resolved_store:
         where_parts.append("store_id = ?")
-        params.append(store_id)
+        params.append(resolved_store)
 
     where_clause = " WHERE " + " AND ".join(where_parts) if where_parts else ""
 

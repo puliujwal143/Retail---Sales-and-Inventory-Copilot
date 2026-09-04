@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from src.database import init_db, query_all, query_one
 from src.analytics import get_dashboard_summary
 from src.inventory_rules import get_inventory_status_df, get_low_stock_items, get_slow_moving_items, get_overstocked_items, TARGET_COVERAGE_DAYS
-from src.sales_rules import get_product_sales_trends, get_sales_spikes, get_sales_drops, get_store_performance, get_category_performance, get_daily_sales_trend, get_yearly_performance, get_seasonality_analysis
+from src.sales_rules import get_product_sales_trends, get_sales_spikes, get_sales_drops, get_store_performance, get_category_performance, get_daily_sales_trend, get_yearly_performance, get_seasonality_analysis, get_sales_analytics_charts
 from src.recommendation import get_attention_items
 from src.query_engine import process_query_intent
 from src.gemini import generate_copilot_response

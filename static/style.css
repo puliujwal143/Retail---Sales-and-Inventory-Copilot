@@ -1288,3 +1288,13 @@ input, select, button, textarea {
     }
 }
 
+/* SVG Chart Container Height Definition */
+.svg-chart-container {
+    width: 100%;
+    min-height: 220px;
+    height: 220px;
+    position: relative;
+    display: block;
+}
+
+
