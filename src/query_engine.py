@@ -13,6 +13,33 @@ def process_query_intent(user_query: str) -> Dict[str, Any]:
     """
     q_lower = user_query.strip().lower()
 
+    # 0. GREETINGS & CASUAL SALUTATIONS
+    greeting_words = ["hi", "hello", "hey", "greetings", "good morning", "good afternoon", "good evening", "help"]
+    if q_lower in greeting_words or any(q_lower.startswith(g + " ") or q_lower.endswith(" " + g) for g in greeting_words):
+        items = get_attention_items()
+        crit_count = len([i for i in items if i["severity"] == "HIGH"])
+        
+        return {
+            "intent": "GREETING",
+            "user_query": user_query,
+            "data_sufficiency": "sufficient",
+            "context_summary": f"Hello! I am your RetailIQ Store Copilot. Currently monitoring 5 stores and 40 product categories. {crit_count} high-priority stock alerts detected today.",
+            "metrics": [
+                {"label": "Active Stores", "value": "5 Locations"},
+                {"label": "Monitored SKUs", "value": "40 Products"},
+                {"label": "High Alerts Today", "value": f"{crit_count} Critical/Warning"}
+            ],
+            "recommendations": [
+                "Ask 'What needs my attention today?' for top operational issues.",
+                "Ask 'Which products are running out?' for inventory stock-out risks.",
+                "Ask 'Which store performed best?' for store sales performance."
+            ],
+            "evidence": [],
+            "assumptions": ["RetailIQ Evidence Grounding Engine Active"],
+            "chart": None,
+            "raw_data": []
+        }
+
     # 1. ATTENTION / TODAY'S ALERTS
     if any(k in q_lower for k in ["attention", "today", "alert", "urgent", "priority", "issue"]):
         items = get_attention_items()
@@ -84,7 +111,6 @@ def process_query_intent(user_query: str) -> Dict[str, Any]:
                 "value": f"Stock: {item['current_stock']} | ADS: {round(item['average_daily_sales'],1)} | Reorder: {item['recommended_reorder']}"
             })
 
-        # Chart: Bar chart of Reorder Quantities
         chart_spec = {
             "type": "horizontal_bar",
             "title": "Recommended Reorder Quantities",
@@ -421,9 +447,15 @@ def process_query_intent(user_query: str) -> Dict[str, Any]:
                 "raw_data": matching_rows
             }
         
-        # General Fallback Intent
+        # 9. General Fallback Intent (Deduplicated across 5 distinct products)
         inv_df = get_inventory_status_df()
-        top_items = inv_df.head(5).to_dict(orient='records') if not inv_df.empty else []
+        if not inv_df.empty:
+            # Group by product_id to get 5 distinct products instead of 5 stores of the same product
+            distinct_products_df = inv_df.drop_duplicates(subset=['product_id']).head(5)
+            top_items = distinct_products_df.to_dict(orient='records')
+        else:
+            top_items = []
+
         evidence_list = [{
             "product_name": it["product_name"],
             "store_name": it["store_name"],
@@ -436,8 +468,8 @@ def process_query_intent(user_query: str) -> Dict[str, Any]:
         } for it in top_items]
 
         chart_spec = {
-            "type": "bar",
-            "title": "Top Catalogue Items Stock Overview",
+            "type": "horizontal_bar",
+            "title": "Top Catalogue SKUs Stock Overview",
             "labels": [it["product_name"] for it in top_items],
             "datasets": [{"label": "Current Stock", "data": [it["current_stock"] for it in top_items], "color": "#10b981"}]
         }
@@ -446,11 +478,11 @@ def process_query_intent(user_query: str) -> Dict[str, Any]:
             "intent": "GENERAL_SUMMARY",
             "user_query": user_query,
             "data_sufficiency": "sufficient",
-            "context_summary": "Extracted high-level inventory and sales catalog summary.",
+            "context_summary": "Extracted high-level inventory and sales catalog summary across distinct products.",
             "metrics": [{"label": it["product_name"], "value": f"Stock: {it['current_stock']}"} for it in top_items],
             "recommendations": ["Use specific questions like 'What is running out?' or 'Which store performed best?' for targeted insights."],
             "evidence": evidence_list,
-            "assumptions": ["Showing top items from overall store catalog"],
+            "assumptions": ["Showing distinct top items from overall store catalog"],
             "chart": chart_spec,
             "raw_data": top_items
         }
