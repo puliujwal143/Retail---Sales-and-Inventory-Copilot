@@ -68,12 +68,20 @@ def generate_copilot_response(processed_query: Dict[str, Any]) -> Dict[str, Any]
     recommendations = processed_query.get("recommendations", [])
     chart = processed_query.get("chart", None)
 
+    structured_ev = processed_query.get("structured_evidence", {})
+
     prompt_content = f"""USER QUESTION: "{user_query}"
 
 CLASSIFIED INTENT: {intent}
 DATA SCOPE: {data_scope}
 SYSTEM DATA SUFFICIENCY: {data_sufficiency}
 ANALYTICS SUMMARY: {context_summary}
+
+STRUCTURED EVIDENCE TAXONOMY:
+- FACTS: {json.dumps(structured_ev.get('facts', []), indent=2)}
+- OBSERVATIONS: {json.dumps(structured_ev.get('observations', []), indent=2)}
+- HYPOTHESES: {json.dumps(structured_ev.get('hypotheses', []), indent=2)}
+- UNKNOWNS: {json.dumps(structured_ev.get('unknowns', []), indent=2)}
 
 SUPPLIED CALCULATED METRICS:
 {json.dumps(metrics, indent=2)}
@@ -87,7 +95,7 @@ SYSTEM ASSUMPTIONS:
 SUPPLIED DETERMINISTIC RECOMMENDATIONS:
 {json.dumps(recommendations, indent=2)}
 
-Remember: Respond ONLY with valid JSON following the schema. Ground every statement in supplied numbers. If data sufficiency is 'insufficient', state clearly that external cause data is unavailable.
+Remember: Respond ONLY with valid JSON following the schema. Directly answer the user's question first. Ground every statement in supplied numbers. If data sufficiency is 'insufficient', explicitly state what the data DOES show, what is UNKNOWN, and present hypotheses only as hypotheses, NOT facts.
 """
 
     # Attempt to call Gemini via google-genai SDK
@@ -171,7 +179,9 @@ def create_deterministic_fallback(processed_query: Dict[str, Any], note: str = "
     recommendations = processed_query.get("recommendations", [])
     chart = processed_query.get("chart", None)
 
-    if data_sufficiency == "insufficient":
+    if processed_query.get("is_out_of_bounds") or "No sales records exist" in context_summary or "NO DATA" in context_summary:
+        answer = context_summary
+    elif data_sufficiency == "insufficient":
         answer = (
             f"Regarding '{user_query}': {context_summary} "
             f"The dataset contains sales transaction history and inventory stock levels, but does NOT contain "

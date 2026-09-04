@@ -30,6 +30,26 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
     cat_filter = spec.get("category")
     limit = spec.get("limit", 5)
 
+    # Out of Bounds Date Check
+    if date_range.get("is_out_of_bounds"):
+        row_b = query_one("SELECT MIN(date) as min_d, MAX(date) as max_d FROM sales")
+        min_d = row_b["min_d"] if row_b else "2016-01-01"
+        max_d = row_b["max_d"] if row_b else "2026-09-03"
+        return {
+            "intent": intent,
+            "is_out_of_bounds": True,
+            "min_db_date": min_d,
+            "max_db_date": max_d,
+            "data_scope": f"Date Scope: Out of Bounds ({start_date}) • Scope: {store_name}",
+            "data_sufficiency": "insufficient",
+            "context_summary": f"No sales records exist for the requested date {start_date}. Supported database range is {min_d} to {max_d}.",
+            "metrics": [{"label": "Requested Period", "value": start_date}, {"label": "Database Bounds", "value": f"{min_d} to {max_d}"}],
+            "recommendations": ["Select a date within the supported range (2016-01-01 to 2026-09-03)."],
+            "evidence": [],
+            "raw_data": [],
+            "chart_data": None
+        }
+
     data_scope_str = f"Date Scope: {time_label} ({start_date} to {end_date}) • Scope: {store_name}"
     if product_family: data_scope_str += f" • Entity: {product_family}"
     elif cat_filter: data_scope_str += f" • Category: {cat_filter}"

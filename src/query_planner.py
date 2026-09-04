@@ -138,17 +138,20 @@ def parse_date_range(text: str) -> Dict[str, Any]:
             "is_comparison": True
         }
 
-    # Single year: e.g. "in 2025", "for 2024"
-    m_single = re.search(r'\b(20\d{2})\b', q)
+    # Single year: e.g. "in 2025", "for 2010"
+    m_single = re.search(r'\b((?:19|20)\d{2})\b', q)
     if m_single:
         y = int(m_single.group(1))
-        end_date = max_db if y == max_year else f"{y}-12-31"
+        min_year = int(min_db.split("-")[0])
+        is_oob = y < min_year or y > max_year
+        end_date = max_db if y >= max_year else f"{y}-12-31"
         return {
             "start_date": f"{y}-01-01",
             "end_date": end_date,
             "granularity": "monthly",
             "time_label": f"Year {y}",
-            "is_comparison": False
+            "is_comparison": False,
+            "is_out_of_bounds": is_oob
         }
 
     # Relative years: e.g. "last 5 years", "last 10 years", "last 3 years"
@@ -394,8 +397,9 @@ def classify_intent(text: str, entities: Dict[str, Any], date_info: Dict[str, An
     if any(k in q for k in [
         "top product", "best product", "best performer", "top performer", "best seller", "best-selling",
         "highest revenue product", "most sold product", "top skus", "worst performer", "worst product",
-        "top 5 products", "top 10 products", "best sku"
-    ]):
+        "top 5 products", "top 10 products", "best sku", "performing product", "performing item",
+        "made the most revenue", "sells the most", "sku is performing"
+    ]) or (any(w in q for w in ["product", "sku", "item"]) and any(w in q for w in ["best", "most", "top", "performing", "lead", "highest", "revenue", "units"])):
         return "TOP_PRODUCTS"
 
     if entities.get("product_family") or entities.get("product") or entities.get("matched_products"):
@@ -432,12 +436,14 @@ def build_query_spec(question: str, override_store: Optional[str] = None, overri
                 entities["store"] = st
                 break
 
-    # Follow-up Memory Context
+    # Follow-up Memory Context Preservation
     if len(q_clean.split()) <= 4 and CONVERSATION_MEMORY.get("last_intent"):
-        if not entities["matched_products"] and CONVERSATION_MEMORY.get("last_product"):
-            entities["product"] = CONVERSATION_MEMORY["last_product"]
-            entities["matched_products"] = [CONVERSATION_MEMORY["last_product"]]
-            entities["entity_type"] = "PRODUCT"
+        if not entities["matched_products"] and CONVERSATION_MEMORY.get("last_matched_products"):
+            entities["matched_products"] = CONVERSATION_MEMORY["last_matched_products"]
+            entities["product_family"] = CONVERSATION_MEMORY.get("last_product_family")
+            entities["entity_type"] = CONVERSATION_MEMORY.get("last_entity_type", "PRODUCT_FAMILY")
+            if CONVERSATION_MEMORY.get("last_product"):
+                entities["product"] = CONVERSATION_MEMORY["last_product"]
         if not entities["category"] and CONVERSATION_MEMORY.get("last_category"):
             entities["category"] = CONVERSATION_MEMORY["last_category"]
 
@@ -450,9 +456,15 @@ def build_query_spec(question: str, override_store: Optional[str] = None, overri
     CONVERSATION_MEMORY["last_intent"] = intent
     CONVERSATION_MEMORY["last_metric"] = entities["metric"]
     CONVERSATION_MEMORY["last_date_range"] = date_info
+    CONVERSATION_MEMORY["last_entity_type"] = entities["entity_type"]
+    if entities["matched_products"]:
+        CONVERSATION_MEMORY["last_matched_products"] = entities["matched_products"]
+        CONVERSATION_MEMORY["last_product_family"] = entities["product_family"]
     if entities["store"]: CONVERSATION_MEMORY["last_store"] = entities["store"]
     if entities["product"]: CONVERSATION_MEMORY["last_product"] = entities["product"]
     if entities["category"]: CONVERSATION_MEMORY["last_category"] = entities["category"]
+
+    requires_cause = any(k in q_clean.lower() for k in ["why", "reason", "cause", "what caused", "what is driving", "what explains"])
 
     return {
         "raw_question": q_clean,
@@ -468,5 +480,6 @@ def build_query_spec(question: str, override_store: Optional[str] = None, overri
         "category": entities["category"],
         "limit": entities["limit"],
         "threshold_days": entities["threshold_days"],
+        "requires_cause_analysis": requires_cause,
         "chart_required": True
     }
