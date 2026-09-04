@@ -3,45 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RetailIQ - AI Retail Command Center</title>
+    <title>RetailIQ — Retail Intelligence Platform</title>
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body class="dark-theme">
+<body class="light-theme">
     <div class="app-layout">
-        <!-- Sidebar Navigation -->
+        <!-- Enterprise Left Sidebar -->
         <aside class="sidebar">
             <div class="brand">
-                <div class="logo-icon">⚡</div>
+                <div class="logo-mark">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0F766E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                        <polyline points="2 17 12 22 22 17"></polyline>
+                        <polyline points="2 12 12 17 22 12"></polyline>
+                    </svg>
+                </div>
                 <div class="brand-text">
-                    <h2>RetailIQ</h2>
-                    <span class="brand-sub">AI Retail Intelligence</span>
+                    <div class="brand-title">RetailIQ</div>
+                    <div class="brand-subtitle">Retail Intelligence Platform</div>
                 </div>
             </div>
 
             <nav class="nav-menu">
-                <div class="nav-section-label">COMMAND CENTER</div>
+                <div class="nav-section-label">OVERVIEW</div>
                 <button class="nav-item active" data-tab="dashboard">
-                    <span class="icon">📊</span> Dashboard
-                </button>
-                <button class="nav-item" data-tab="inventory">
-                    <span class="icon">📦</span> Inventory Intelligence
-                </button>
-                <button class="nav-item" data-tab="sales">
-                    <span class="icon">📈</span> Sales Analytics
-                </button>
-                <button class="nav-item" data-tab="copilot">
-                    <span class="icon">🤖</span> AI Copilot
+                    <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    <span>Dashboard</span>
                 </button>
 
-                <div class="nav-section-label" style="margin-top: 20px;">INSIGHTS</div>
-                <button class="nav-item quick-jump" data-tab="inventory" data-status="CRITICAL">
-                    <span class="icon">🚨</span> Stock Alerts
+                <div class="nav-section-label" style="margin-top: 24px;">OPERATIONS</div>
+                <button class="nav-item" data-tab="inventory">
+                    <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                    <span>Inventory</span>
                 </button>
-                <button class="nav-item quick-jump" data-tab="sales">
-                    <span class="icon">⚡</span> Sales Trends
+                <button class="nav-item" data-tab="sales">
+                    <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                    <span>Sales Analytics</span>
                 </button>
-                <button class="nav-item quick-jump" data-tab="dashboard">
-                    <span class="icon">🏆</span> Performance
+
+                <div class="nav-section-label" style="margin-top: 24px;">INTELLIGENCE</div>
+                <button class="nav-item" data-tab="copilot">
+                    <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10H12V2z"></path><path d="M12 12L2.1 10a10.05 10.05 0 0 1 9.9-8v10z"></path></svg>
+                    <span>AI Copilot</span>
                 </button>
             </nav>
 
@@ -56,73 +62,69 @@
             </div>
         </aside>
 
-        <!-- Main Content Area -->
+        <!-- Main Workspace Area -->
         <main class="main-content">
             <!-- Top Header Bar -->
             <header class="top-header">
                 <div class="header-left">
-                    <button id="sidebar-toggle-btn" class="btn-icon">☰</button>
+                    <button id="sidebar-toggle-btn" class="btn-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                    </button>
                     <div class="page-title">
-                        <h1 id="current-tab-title">Executive Dashboard</h1>
-                        <p id="current-tab-subtitle">Real-time inventory intelligence and operational metrics</p>
+                        <h1 id="current-tab-title">Dashboard</h1>
+                        <p id="current-tab-subtitle">Retail performance overview across all store locations</p>
                     </div>
                 </div>
                 <div class="header-right">
-                    <div class="search-input-wrapper">
-                        <span class="search-icon">🔍</span>
-                        <input type="text" id="global-search-input" placeholder="Search product, category, store..." class="form-input search-input">
-                    </div>
                     <div class="store-selector-wrapper">
-                        <label for="global-store-select">Store:</label>
                         <select id="global-store-select" class="form-select">
                             <option value="all">All Stores (5)</option>
                         </select>
                     </div>
+                    <div class="header-action-icon" title="Notifications">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                    </div>
                     <div class="user-profile-badge">
-                        <span class="user-avatar">👨‍💼</span>
-                        <span class="user-role">Store Manager</span>
+                        <div class="avatar-circle">M</div>
+                        <span class="user-name">Manager</span>
                     </div>
                 </div>
             </header>
 
-            <!-- TAB 1: DASHBOARD VIEW -->
+            <!-- TAB 1: EXECUTIVE DASHBOARD -->
             <section id="tab-dashboard" class="tab-view active">
                 <!-- Hero Greeting Banner -->
                 <div class="hero-banner">
                     <div class="hero-text">
-                        <h2>Good morning, Manager 👋</h2>
-                        <p>Here’s what needs your operational attention across your 5 retail store locations today.</p>
+                        <h2>Good morning, Manager</h2>
+                        <p>Here’s what needs your operational attention across your retail operation today.</p>
                     </div>
                     <div class="hero-status">
-                        <span class="badge badge-primary">System Healthy</span>
-                        <span class="last-sync-time">Updated Today</span>
+                        <span class="badge badge-success">System Active</span>
                     </div>
                 </div>
 
-                <!-- KPI Metrics Grid -->
+                <!-- KPI Cards Row -->
                 <div class="kpi-grid">
                     <div class="kpi-card">
                         <div class="kpi-header">
-                            <span class="kpi-title">Total Revenue (90d)</span>
-                            <span class="kpi-icon">💰</span>
+                            <span class="kpi-title">TOTAL REVENUE</span>
                         </div>
                         <div class="kpi-value" id="kpi-revenue">$0.00</div>
-                        <div class="kpi-trend trend-positive">▲ +12.4% vs prev period</div>
+                        <div class="kpi-trend trend-positive">↑ 12.4% vs previous period</div>
                     </div>
 
                     <div class="kpi-card">
                         <div class="kpi-header">
-                            <span class="kpi-title">Total Units Sold</span>
-                            <span class="kpi-icon">🏷️</span>
+                            <span class="kpi-title">UNITS SOLD</span>
                         </div>
                         <div class="kpi-value" id="kpi-units">0</div>
-                        <div class="kpi-trend trend-positive">▲ +8.2% demand volume</div>
+                        <div class="kpi-trend trend-positive">↑ 8.2% demand volume</div>
                     </div>
 
                     <div class="kpi-card">
                         <div class="kpi-header">
-                            <span class="kpi-title">Inventory Valuation</span>
-                            <span class="kpi-icon">🏢</span>
+                            <span class="kpi-title">INVENTORY VALUATION</span>
                         </div>
                         <div class="kpi-value" id="kpi-valuation">$0.00</div>
                         <div class="kpi-subtext" id="kpi-inv-units">0 Total Units in Stock</div>
@@ -130,8 +132,7 @@
 
                     <div class="kpi-card highlight-warning">
                         <div class="kpi-header">
-                            <span class="kpi-title">Low Stock Items</span>
-                            <span class="kpi-icon">⚠️</span>
+                            <span class="kpi-title">LOW STOCK SKUs</span>
                         </div>
                         <div class="kpi-value" id="kpi-alerts-count">0</div>
                         <div class="kpi-subtext" id="kpi-alerts-breakdown">Critical: 0 | Warning: 0</div>
@@ -139,22 +140,21 @@
 
                     <div class="kpi-card">
                         <div class="kpi-header">
-                            <span class="kpi-title">Overstocked Items</span>
-                            <span class="kpi-icon">📦</span>
+                            <span class="kpi-title">OVERSTOCK SKUs</span>
                         </div>
                         <div class="kpi-value" id="kpi-overstock-count">0</div>
                         <div class="kpi-subtext">Potential capital lock</div>
                     </div>
                 </div>
 
-                <!-- Main Charts & Visualizations Grid -->
+                <!-- Dashboard Analytics BI Grid -->
                 <div class="dashboard-grid">
-                    <!-- Revenue Trend Chart with Time Selector -->
+                    <!-- Revenue & Demand Trend Chart -->
                     <div class="panel chart-panel">
                         <div class="panel-header">
                             <div>
-                                <h3>📈 Revenue & Demand Trend</h3>
-                                <span class="subtitle">Daily revenue trajectory over time</span>
+                                <h3>Revenue & Demand Trend</h3>
+                                <span class="subtitle">Daily revenue movement over time</span>
                             </div>
                             <div class="time-range-picker">
                                 <button class="range-btn" data-days="7">7D</button>
@@ -167,32 +167,33 @@
                         </div>
                     </div>
 
-                    <!-- Visual Inventory Health Breakdown -->
+                    <!-- Inventory Health Composition -->
                     <div class="panel">
                         <div class="panel-header">
-                            <h3>📊 Inventory Health Composition</h3>
+                            <h3>Inventory Health</h3>
+                            <span class="subtitle">Stock level breakdown</span>
                         </div>
                         <div id="inventory-health-container" class="health-breakdown-wrapper">
-                            <!-- Visual progress bars rendered by app.js -->
+                            <!-- Rendered by app.js -->
                         </div>
                     </div>
                 </div>
 
-                <!-- Attention Items Banner -->
+                <!-- Priority Actions / Alerts Section -->
                 <div class="panel attention-panel">
                     <div class="panel-header">
-                        <h3>🚨 Today's Operational Priorities</h3>
+                        <h3>Priority Actions Required</h3>
                         <span class="subtitle">Ranked critical stock-outs, slow-moving items, and sales anomalies</span>
                     </div>
                     <div id="attention-items-container" class="attention-grid">
-                        <div class="loading-spinner">Loading operational alerts...</div>
+                        <div class="loading-spinner">Loading priority actions...</div>
                     </div>
                 </div>
 
                 <!-- Top Performing Products Table -->
                 <div class="panel">
                     <div class="panel-header">
-                        <h3>⭐ Top 5 Performing Products</h3>
+                        <h3>Top Performing Products</h3>
                     </div>
                     <div class="table-wrapper">
                         <table class="data-table">
@@ -201,8 +202,8 @@
                                     <th>Rank</th>
                                     <th>Product</th>
                                     <th>Category</th>
-                                    <th>Units Sold</th>
-                                    <th>Total Revenue</th>
+                                    <th class="text-right">Units Sold</th>
+                                    <th class="text-right">Revenue</th>
                                     <th>Status</th>
                                 </tr>
                             </thead>
@@ -214,21 +215,22 @@
                 </div>
             </section>
 
-            <!-- TAB 2: INVENTORY INTELLIGENCE VIEW -->
+            <!-- TAB 2: INVENTORY INTELLIGENCE -->
             <section id="tab-inventory" class="tab-view">
-                <!-- Inventory KPI Cards -->
-                <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
-                    <div class="kpi-card"><div class="kpi-header"><span>Total SKUs</span><span>📦</span></div><div class="kpi-value" id="inv-kpi-total">0</div></div>
-                    <div class="kpi-card highlight-critical"><div class="kpi-header"><span>Critical (<= 2d)</span><span>🚨</span></div><div class="kpi-value" id="inv-kpi-critical">0</div></div>
-                    <div class="kpi-card highlight-warning"><div class="kpi-header"><span>Warning (<= 7d)</span><span>⚠️</span></div><div class="kpi-value" id="inv-kpi-warning">0</div></div>
-                    <div class="kpi-card"><div class="kpi-header"><span>Overstock (> 30d)</span><span>📈</span></div><div class="kpi-value" id="inv-kpi-overstock">0</div></div>
-                    <div class="kpi-card"><div class="kpi-header"><span>Slow Moving</span><span>🐢</span></div><div class="kpi-value" id="inv-kpi-slow">0</div></div>
+                <!-- Status Summary KPI Row -->
+                <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));">
+                    <div class="kpi-card"><div class="kpi-header"><span class="kpi-title">TOTAL PRODUCTS</span></div><div class="kpi-value" id="inv-kpi-total">0</div></div>
+                    <div class="kpi-card highlight-critical"><div class="kpi-header"><span class="kpi-title">CRITICAL (<= 2D)</span></div><div class="kpi-value" id="inv-kpi-critical">0</div></div>
+                    <div class="kpi-card highlight-warning"><div class="kpi-header"><span class="kpi-title">WARNING (<= 7D)</span></div><div class="kpi-value" id="inv-kpi-warning">0</div></div>
+                    <div class="kpi-card"><div class="kpi-header"><span class="kpi-title">OVERSTOCK (> 30D)</span></div><div class="kpi-value" id="inv-kpi-overstock">0</div></div>
+                    <div class="kpi-card"><div class="kpi-header"><span class="kpi-title">SLOW MOVING</span></div><div class="kpi-value" id="inv-kpi-slow">0</div></div>
                 </div>
 
-                <!-- Filters Bar -->
-                <div class="filter-bar">
+                <!-- Filter Toolbar -->
+                <div class="filter-toolbar">
                     <div class="search-box">
-                        <input type="text" id="inv-search-input" placeholder="Search product or category..." class="form-input">
+                        <span class="search-icon">⌕</span>
+                        <input type="text" id="inv-search-input" placeholder="Search products, stores, categories..." class="form-input search-input">
                     </div>
                     <div class="filter-group">
                         <select id="inv-filter-category" class="form-select">
@@ -245,20 +247,20 @@
                     </div>
                 </div>
 
-                <!-- Inventory Data Table -->
+                <!-- Enterprise Data Table -->
                 <div class="panel">
                     <div class="table-wrapper">
                         <table class="data-table clickable-table">
                             <thead>
                                 <tr>
-                                    <th>Product Name</th>
+                                    <th>Product</th>
                                     <th>Category</th>
-                                    <th>Store Location</th>
-                                    <th>Current Stock</th>
-                                    <th>Avg Daily Sales</th>
-                                    <th>Days Remaining</th>
-                                    <th>Inventory Status</th>
-                                    <th>Recommended Reorder</th>
+                                    <th>Store</th>
+                                    <th class="text-right">Stock</th>
+                                    <th class="text-right">Avg Daily Sales</th>
+                                    <th class="text-right">Days Remaining</th>
+                                    <th>Status</th>
+                                    <th class="text-right">Recommended Reorder</th>
                                 </tr>
                             </thead>
                             <tbody id="inventory-tbody">
@@ -271,10 +273,10 @@
 
             <!-- TAB 3: SALES ANALYTICS WORKSPACE -->
             <section id="tab-sales" class="tab-view">
-                <!-- Workspace Filters Bar -->
-                <div class="filter-bar">
+                <!-- Filter Toolbar -->
+                <div class="filter-toolbar">
                     <div class="filter-group">
-                        <label for="sales-timeframe-select">Time Window:</label>
+                        <label for="sales-timeframe-select">Date Window:</label>
                         <select id="sales-timeframe-select" class="form-select">
                             <option value="30">Last 30 Days</option>
                             <option value="7">Last 7 Days</option>
@@ -289,38 +291,38 @@
                     </div>
                 </div>
 
-                <!-- Sales Workspace KPI Cards -->
+                <!-- Horizontal KPI Row -->
                 <div class="kpi-grid">
                     <div class="kpi-card">
-                        <div class="kpi-header"><span>Period Revenue</span><span>💰</span></div>
+                        <div class="kpi-header"><span class="kpi-title">TOTAL REVENUE</span></div>
                         <div class="kpi-value" id="sales-kpi-revenue">$0.00</div>
-                        <div class="kpi-subtext">Total sales revenue</div>
+                        <div class="kpi-subtext">Selected date window</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-header"><span>Units Sold</span><span>🏷️</span></div>
+                        <div class="kpi-header"><span class="kpi-title">UNITS SOLD</span></div>
                         <div class="kpi-value" id="sales-kpi-units">0</div>
-                        <div class="kpi-subtext">Total unit volume</div>
+                        <div class="kpi-subtext">Total volume</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-header"><span>Avg Daily Revenue</span><span>📊</span></div>
+                        <div class="kpi-header"><span class="kpi-title">AVG DAILY REVENUE</span></div>
                         <div class="kpi-value" id="sales-kpi-daily-rev">$0.00</div>
                         <div class="kpi-subtext">Average per day</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-header"><span>Top Category</span><span>🏆</span></div>
+                        <div class="kpi-header"><span class="kpi-title">TOP CATEGORY</span></div>
                         <div class="kpi-value" id="sales-kpi-top-cat">-</div>
                         <div class="kpi-subtext">Highest revenue category</div>
                     </div>
                 </div>
 
-                <!-- 6 MULTI-CHART GRID WORKSPACE -->
+                <!-- Varied BI Charts Layout -->
                 <div class="charts-workspace-grid">
-                    <!-- CHART 1: Revenue Trend -->
-                    <div class="panel">
+                    <!-- CHART 1: Revenue Trend (2/3 width) -->
+                    <div class="panel chart-span-2">
                         <div class="panel-header">
                             <div>
-                                <h3>Chart 1 — Revenue Trend</h3>
-                                <span class="subtitle">Daily revenue trajectory</span>
+                                <h3>Revenue Trend</h3>
+                                <span class="subtitle">Revenue movement over time</span>
                             </div>
                         </div>
                         <div id="chart-sales-revenue" class="svg-chart-container"></div>
@@ -330,30 +332,30 @@
                     <div class="panel">
                         <div class="panel-header">
                             <div>
-                                <h3>Chart 2 — Units Sold Demand</h3>
-                                <span class="subtitle">Daily unit demand volume</span>
+                                <h3>Units Sold Demand</h3>
+                                <span class="subtitle">Daily volume trajectory</span>
                             </div>
                         </div>
                         <div id="chart-sales-units" class="svg-chart-container"></div>
                     </div>
 
-                    <!-- CHART 3: Category Revenue -->
+                    <!-- CHART 3: Revenue by Category -->
                     <div class="panel">
                         <div class="panel-header">
                             <div>
-                                <h3>Chart 3 — Revenue by Category</h3>
+                                <h3>Revenue by Category</h3>
                                 <span class="subtitle">Category sales distribution</span>
                             </div>
                         </div>
                         <div id="chart-sales-category" class="svg-chart-container"></div>
                     </div>
 
-                    <!-- CHART 4: Top 5 Products Horizontal Bar -->
+                    <!-- CHART 4: Top Products Horizontal Bar -->
                     <div class="panel">
                         <div class="panel-header">
                             <div>
-                                <h3>Chart 4 — Top Products by Revenue</h3>
-                                <span class="subtitle">Highest performing products</span>
+                                <h3>Top Products by Revenue</h3>
+                                <span class="subtitle">Highest performing SKUs</span>
                             </div>
                         </div>
                         <div id="chart-sales-top-products" class="svg-chart-container"></div>
@@ -363,29 +365,29 @@
                     <div class="panel">
                         <div class="panel-header">
                             <div>
-                                <h3>Chart 5 — Store Performance</h3>
-                                <span class="subtitle">Revenue comparison across stores</span>
+                                <h3>Store Performance Comparison</h3>
+                                <span class="subtitle">Revenue by retail location</span>
                             </div>
                         </div>
                         <div id="chart-sales-store" class="svg-chart-container"></div>
                     </div>
 
-                    <!-- CHART 6: Sales Spikes & Drops Highlights -->
+                    <!-- CHART 6: Sales Anomalies Highlights -->
                     <div class="panel">
                         <div class="panel-header">
                             <div>
-                                <h3>Chart 6 — Sales Spikes & Drops</h3>
-                                <span class="subtitle">Anomalies (>= +30% spike, <= -30% drop)</span>
+                                <h3>Sales Spikes & Drops Highlights</h3>
+                                <span class="subtitle">Spikes (>= +30%) and Drops (<= -30%)</span>
                             </div>
                         </div>
                         <div id="spikes-drops-container" class="trend-card-list"></div>
                     </div>
                 </div>
 
-                <!-- AI-Ready Deterministic Insights Section -->
+                <!-- AI-Ready Deterministic Insights -->
                 <div class="panel">
                     <div class="panel-header">
-                        <h3>💡 AI-Ready Deterministic Sales Insights</h3>
+                        <h3>AI-Ready Deterministic Sales Insights</h3>
                         <span class="subtitle">Automated facts calculated from transaction history</span>
                     </div>
                     <div id="sales-insights-container" class="insights-list">
@@ -397,59 +399,60 @@
             <!-- TAB 4: AI COPILOT WORKSPACE -->
             <section id="tab-copilot" class="tab-view">
                 <div class="copilot-container">
-                    <!-- Header Banner -->
-                    <div class="copilot-header-banner">
-                        <div class="copilot-title">
-                            <h3>🤖 RetailIQ Grounded Copilot</h3>
-                            <p>Ask natural language questions. Powered by SQLite analytics & Gemini explanation layer.</p>
-                        </div>
-                        <div class="copilot-badge">
-                            <span class="badge badge-primary">Evidence First</span>
-                        </div>
-                    </div>
-
-                    <!-- Clickable Preset Questions -->
+                    <!-- Clickable Suggestion Prompts Bar -->
                     <div class="preset-prompts-bar">
-                        <span class="prompt-label">Preset Questions:</span>
-                        <button class="prompt-pill" data-prompt="What needs my attention today?">🚨 What needs attention?</button>
-                        <button class="prompt-pill" data-prompt="Which products are running out?">⚠️ What is running out?</button>
-                        <button class="prompt-pill" data-prompt="What should I reorder?">🛒 What should I reorder?</button>
-                        <button class="prompt-pill" data-prompt="Which products are slow-moving?">🐢 Slow-moving products?</button>
-                        <button class="prompt-pill" data-prompt="How did laptops perform this month?">💻 Laptop performance?</button>
-                        <button class="prompt-pill" data-prompt="Why did laptop sales increase?">❓ Why did laptops increase?</button>
-                        <button class="prompt-pill" data-prompt="Which store performed best?">🏆 Best store?</button>
+                        <span class="prompt-label">Suggested Questions:</span>
+                        <button class="prompt-pill" data-prompt="What needs my attention today?">What needs my attention today?</button>
+                        <button class="prompt-pill" data-prompt="Which products should I reorder?">Which products should I reorder?</button>
+                        <button class="prompt-pill" data-prompt="Which stores are performing best?">Which stores are performing best?</button>
+                        <button class="prompt-pill" data-prompt="How did laptop sales perform?">How did laptop sales perform?</button>
+                        <button class="prompt-pill" data-prompt="Why did laptop sales increase?">Why did laptop sales increase?</button>
                     </div>
 
-                    <!-- Chat Output Messages Container -->
+                    <!-- Chat Messages Workspace -->
                     <div id="chat-messages-container" class="chat-messages">
-                        <!-- Welcome Assistant Message -->
-                        <div class="chat-message assistant-message">
-                            <div class="message-header">
-                                <span class="assistant-avatar">🤖</span>
-                                <span class="assistant-name">RetailIQ Evidence Copilot</span>
+                        <!-- Centered Welcome Landing Area -->
+                        <div id="copilot-welcome-card" class="copilot-welcome-card">
+                            <div class="welcome-icon">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0F766E" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
                             </div>
-                            <div class="message-content">
-                                <p>Hello! I am your store copilot. I provide <strong>100% data-grounded</strong> explanations, recommendations, and SVG charts for inventory, stock-outs, sales trends, and store performance.</p>
-                                <p>Select a preset prompt above or ask a natural language question!</p>
+                            <h2>RetailIQ Copilot</h2>
+                            <p>Ask natural language questions grounded strictly by SQLite analytics & Gemini explanation layer.</p>
+                            
+                            <div class="welcome-suggestions-grid">
+                                <div class="suggestion-card" data-prompt="What needs my attention today?">
+                                    <div class="sugg-title">Today's Attention Items</div>
+                                    <div class="sugg-desc">Identify critical low stock & demand anomalies</div>
+                                </div>
+                                <div class="suggestion-card" data-prompt="Which products should I reorder?">
+                                    <div class="sugg-title">Reorder Recommendations</div>
+                                    <div class="sugg-desc">Calculate stock replenishment for 7-day target coverage</div>
+                                </div>
+                                <div class="suggestion-card" data-prompt="Which stores are performing best?">
+                                    <div class="sugg-title">Store Revenue Comparison</div>
+                                    <div class="sugg-desc">Compare performance across 5 store locations</div>
+                                </div>
+                                <div class="suggestion-card" data-prompt="How did laptop sales perform?">
+                                    <div class="sugg-title">Category Demand Analysis</div>
+                                    <div class="sugg-desc">Inspect sales trend curves & period growth</div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Multi-step AI Progress Indicator (Hidden by default) -->
+                    <!-- AI Multi-step Thinking Bar -->
                     <div id="ai-loading-indicator" class="ai-loading-card hidden">
                         <div class="spinner-ring"></div>
                         <div class="loading-steps">
-                            <div class="loading-step-item active">● Analyzing retail database query...</div>
-                            <div class="loading-step-item">○ Computing stock-out & reorder math...</div>
-                            <div class="loading-step-item">○ Formatting grounded evidence & charts...</div>
+                            <div class="loading-step-item active">Analyzing retail database...</div>
                         </div>
                     </div>
 
                     <!-- Chat Input Form -->
                     <form id="chat-form" class="chat-input-wrapper">
-                        <input type="text" id="chat-input" placeholder="Ask questions like 'What should I reorder?' or 'How did laptops perform?'..." autocomplete="off">
+                        <input type="text" id="chat-input" placeholder="Ask RetailIQ a question..." autocomplete="off">
                         <button type="submit" id="chat-submit-btn" class="btn-primary">
-                            <span>Send Query</span> ➔
+                            <span>Send</span>
                         </button>
                     </form>
                 </div>
@@ -468,43 +471,43 @@
                 <button id="modal-close-btn" class="modal-close-icon">✕</button>
             </div>
             <div class="modal-body">
-                <!-- Modal Quick Metrics -->
+                <!-- Metrics Grid -->
                 <div class="modal-metrics-grid">
                     <div class="modal-metric-box">
-                        <span class="m-label">Current Stock</span>
+                        <span class="m-label">CURRENT STOCK</span>
                         <span id="modal-stock-val" class="m-val">0</span>
                     </div>
                     <div class="modal-metric-box">
-                        <span class="m-label">Avg Daily Sales</span>
+                        <span class="m-label">AVG DAILY SALES</span>
                         <span id="modal-ads-val" class="m-val">0.0 / day</span>
                     </div>
                     <div class="modal-metric-box">
-                        <span class="m-label">Days Left</span>
+                        <span class="m-label">DAYS REMAINING</span>
                         <span id="modal-days-val" class="m-val">0</span>
                     </div>
                     <div class="modal-metric-box">
-                        <span class="m-label">30d Revenue</span>
+                        <span class="m-label">30D REVENUE</span>
                         <span id="modal-revenue-val" class="m-val">$0.00</span>
                     </div>
                 </div>
 
-                <!-- Product 30-Day Sales Trend Curve -->
+                <!-- Product 30-Day Sales Curve -->
                 <div class="modal-section">
-                    <h4>📈 30-Day Product Sales Curve</h4>
+                    <h4>30-Day Product Sales Curve</h4>
                     <div id="modal-sales-chart" class="svg-chart-container" style="height: 160px;"></div>
                 </div>
 
-                <!-- Automated Reorder Math Callout -->
+                <!-- Automated Reorder Callout -->
                 <div class="modal-section reorder-callout-box">
-                    <h4>🛒 Automated Reorder Recommendation</h4>
+                    <h4>Automated Reorder Recommendation</h4>
                     <div id="modal-reorder-summary" class="reorder-summary-text">
                         Loading reorder calculation...
                     </div>
                 </div>
 
-                <!-- Evidence & Assumptions Breakdown -->
+                <!-- Evidence Breakdown -->
                 <div class="modal-section evidence-box">
-                    <h4>🔍 Supporting Evidence & Business Rules</h4>
+                    <h4>Supporting Evidence & Calculations</h4>
                     <div id="modal-evidence-text" class="evidence-details">
                         <!-- Rendered by app.js -->
                     </div>

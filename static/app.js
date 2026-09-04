@@ -1,4 +1,4 @@
-// RetailIQ Enterprise SaaS Frontend Engine
+// RetailIQ Enterprise B2B Frontend Engine
 document.addEventListener("DOMContentLoaded", () => {
     // Global Application State
     const state = {
@@ -44,7 +44,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 const targetTab = btn.getAttribute("data-tab");
                 if (!targetTab) return;
 
-                // Handle filter shortcuts
                 const targetStatus = btn.getAttribute("data-status");
                 if (targetStatus) {
                     document.getElementById("inv-filter-status").value = targetStatus;
@@ -64,20 +63,20 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Update headers
                 switch (targetTab) {
                     case "dashboard":
-                        tabTitle.textContent = "Executive Dashboard";
-                        tabSubtitle.textContent = "Real-time inventory intelligence and operational metrics";
+                        tabTitle.textContent = "Dashboard";
+                        tabSubtitle.textContent = "Retail performance overview across all store locations";
                         break;
                     case "inventory":
                         tabTitle.textContent = "Inventory Intelligence";
-                        tabSubtitle.textContent = "Stock levels, average daily sales, and automated reorder math";
+                        tabSubtitle.textContent = "Monitor stock health and identify products requiring action";
                         break;
                     case "sales":
                         tabTitle.textContent = "Sales Analytics Workspace";
-                        tabSubtitle.textContent = "Multi-chart demand visualization, category revenue, and store trends";
+                        tabSubtitle.textContent = "Track revenue, demand, product performance and store trends";
                         break;
                     case "copilot":
-                        tabTitle.textContent = "AI Evidence Copilot";
-                        tabSubtitle.textContent = "Natural language queries grounded strictly by SQLite deterministic analytics";
+                        tabTitle.textContent = "AI Copilot";
+                        tabSubtitle.textContent = "Ask questions about sales, inventory and retail performance";
                         break;
                 }
             });
@@ -164,7 +163,7 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("kpi-revenue").textContent = `$${data.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
             document.getElementById("kpi-units").textContent = data.total_units_sold.toLocaleString();
             document.getElementById("kpi-valuation").textContent = `$${data.total_inventory_valuation.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
-            document.getElementById("kpi-inv-units").textContent = `${data.total_inventory_units.toLocaleString()} Units in Stock`;
+            document.getElementById("kpi-inv-units").textContent = `${data.total_inventory_units.toLocaleString()} Total Units in Stock`;
 
             const totalAlerts = data.critical_low_stock_count + data.warning_low_stock_count;
             document.getElementById("kpi-alerts-count").textContent = totalAlerts;
@@ -199,12 +198,12 @@ document.addEventListener("DOMContentLoaded", () => {
             const items = await res.json();
 
             if (!items || items.length === 0) {
-                container.innerHTML = '<div class="att-desc">No high-priority attention items detected today. Stock levels are healthy!</div>';
+                container.innerHTML = '<div class="att-desc">No priority actions required today. All stock levels healthy!</div>';
                 return;
             }
 
             container.innerHTML = "";
-            items.slice(0, 5).forEach(item => {
+            items.slice(0, 4).forEach(item => {
                 const card = document.createElement("div");
                 card.className = `attention-card ${item.severity}`;
                 card.innerHTML = `
@@ -219,11 +218,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 container.appendChild(card);
             });
         } catch (err) {
-            container.innerHTML = '<div class="att-desc">Failed to load attention items.</div>';
+            container.innerHTML = '<div class="att-desc">Failed to load priority actions.</div>';
         }
     }
 
-    // Render Inventory Health Composition
+    // Render Inventory Health Breakdown
     function renderInventoryHealthBreakdown(data) {
         const container = document.getElementById("inventory-health-container");
         const total = (data.total_inventory_units) || 1;
@@ -231,11 +230,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const healthyCount = total - (data.critical_low_stock_count + data.warning_low_stock_count + data.slow_moving_count + data.overstock_count);
 
         const items = [
-            { label: "Healthy", count: Math.max(0, healthyCount), color: "#10b981" },
-            { label: "Warning (<= 7 Days)", count: data.warning_low_stock_count, color: "#f59e0b" },
-            { label: "Critical (<= 2 Days)", count: data.critical_low_stock_count, color: "#ef4444" },
-            { label: "Overstocked", count: data.overstock_count, color: "#3b82f6" },
-            { label: "Slow Moving", count: data.slow_moving_count, color: "#6b7280" }
+            { label: "Healthy", count: Math.max(0, healthyCount), color: "#15803D" },
+            { label: "Warning (<= 7 Days)", count: data.warning_low_stock_count, color: "#B45309" },
+            { label: "Critical (<= 2 Days)", count: data.critical_low_stock_count, color: "#B91C1C" },
+            { label: "Overstocked", count: data.overstock_count, color: "#2563EB" },
+            { label: "Slow Moving", count: data.slow_moving_count, color: "#64748B" }
         ];
 
         container.innerHTML = items.map(it => {
@@ -264,9 +263,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 <td><strong>#${idx + 1}</strong></td>
                 <td><strong>${p.product_name}</strong></td>
                 <td><span class="badge badge-primary">${p.category}</span></td>
-                <td>${p.units_sold} units</td>
-                <td><strong>$${p.revenue.toLocaleString('en-US', {minimumFractionDigits: 2})}</strong></td>
-                <td><span class="badge badge-healthy">Active Growth</span></td>
+                <td class="text-right">${p.units_sold} units</td>
+                <td class="text-right"><strong>$${p.revenue.toLocaleString('en-US', {minimumFractionDigits: 2})}</strong></td>
+                <td><span class="badge badge-success">Growth</span></td>
             </tr>
         `).join("");
     }
@@ -277,7 +276,6 @@ document.addEventListener("DOMContentLoaded", () => {
             const res = await fetch("/api/inventory");
             state.inventoryData = await res.json();
 
-            // Counts for KPI
             const total = state.inventoryData.length;
             const critical = state.inventoryData.filter(i => i.status === "CRITICAL" || i.status === "OUT_OF_STOCK").length;
             const warning = state.inventoryData.filter(i => i.status === "WARNING").length;
@@ -290,7 +288,6 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("inv-kpi-overstock").textContent = overstock;
             document.getElementById("inv-kpi-slow").textContent = slow;
 
-            // Categories dropdown
             const categories = [...new Set(state.inventoryData.map(i => i.category))];
             const catSelect = document.getElementById("inv-filter-category");
             catSelect.innerHTML = '<option value="all">All Categories</option>';
@@ -340,7 +337,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             const reorderText = i.recommended_reorder > 0 ? 
-                `<strong style="color: var(--accent-cyan);">+${i.recommended_reorder} units</strong>` : 
+                `<strong style="color: var(--brand-emerald);">+${i.recommended_reorder} units</strong>` : 
                 `<span style="color: var(--text-dim);">0</span>`;
 
             return `
@@ -348,16 +345,15 @@ document.addEventListener("DOMContentLoaded", () => {
                     <td><strong>${i.product_name}</strong></td>
                     <td><span class="badge badge-primary">${i.category}</span></td>
                     <td>${i.store_name}</td>
-                    <td><strong>${i.current_stock}</strong></td>
-                    <td>${i.average_daily_sales.toFixed(1)} / day</td>
-                    <td>${i.days_remaining > 900 ? '999+' : i.days_remaining} days</td>
+                    <td class="text-right"><strong>${i.current_stock}</strong></td>
+                    <td class="text-right">${i.average_daily_sales.toFixed(1)} / day</td>
+                    <td class="text-right">${i.days_remaining > 900 ? '999+' : i.days_remaining} days</td>
                     <td>${statusBadge}</td>
-                    <td>${reorderText}</td>
+                    <td class="text-right">${reorderText}</td>
                 </tr>
             `;
         }).join("");
 
-        // Attach click listeners for product modal
         tbody.querySelectorAll("tr[data-product-id]").forEach(row => {
             row.addEventListener("click", () => {
                 const prodId = row.getAttribute("data-product-id");
@@ -367,7 +363,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Open Product Detail Slide-Over Modal
+    // Open Product Detail Modal
     async function openProductDetailModal(productId, storeId) {
         modal.classList.remove("hidden");
         document.getElementById("modal-prod-name").textContent = "Loading...";
@@ -384,39 +380,36 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("modal-days-val").textContent = `${data.metrics.days_remaining} days`;
             document.getElementById("modal-revenue-val").textContent = `$${data.metrics["30d_revenue"].toLocaleString('en-US', {minimumFractionDigits: 2})}`;
 
-            // Reorder math text
             const reorderQty = data.metrics.recommended_reorder;
             if (reorderQty > 0) {
                 document.getElementById("modal-reorder-summary").innerHTML = `
-                    <div style="font-weight: 700; color: var(--accent-cyan); font-size: 15px; margin-bottom: 4px;">
+                    <div style="font-weight: 700; color: var(--brand-emerald); font-size: 14px; margin-bottom: 4px;">
                         Reorder Recommendation: +${reorderQty} Units
                     </div>
-                    <div>Current stock of <strong>${data.metrics.current_stock}</strong> covers only <strong>${data.metrics.days_remaining} days</strong> of average demand. Reorder ${reorderQty} units to maintain 7-day target coverage safety stock.</div>
+                    <div>Current stock of <strong>${data.metrics.current_stock}</strong> covers only <strong>${data.metrics.days_remaining} days</strong> of average demand. Reorder ${reorderQty} units to maintain 7-day target coverage.</div>
                 `;
             } else {
                 document.getElementById("modal-reorder-summary").innerHTML = `
-                    <div style="font-weight: 700; color: var(--status-healthy); font-size: 15px; margin-bottom: 4px;">
+                    <div style="font-weight: 700; color: var(--status-success); font-size: 14px; margin-bottom: 4px;">
                         Stock Level Healthy
                     </div>
-                    <div>Current inventory of <strong>${data.metrics.current_stock}</strong> units fully covers demand for <strong>${data.metrics.days_remaining} days</strong> (exceeding 7-day safety threshold).</div>
+                    <div>Current stock of <strong>${data.metrics.current_stock}</strong> units fully covers demand for <strong>${data.metrics.days_remaining} days</strong> (exceeding 7-day safety threshold).</div>
                 `;
             }
 
-            // Evidence Text
             document.getElementById("modal-evidence-text").innerHTML = `
                 <div>• <strong>Calculation Source:</strong> ${data.evidence.source}</div>
                 <div>• <strong>Formula:</strong> ${data.evidence.calculation}</div>
                 <div>• <strong>Assumptions:</strong> ${data.evidence.assumptions.join(" | ")}</div>
             `;
 
-            // Modal mini sales curve SVG
             const dates = data.sales_trend.map(d => d.date);
             const revs = data.sales_trend.map(d => d.revenue);
             const chartSpec = {
                 type: "line",
                 title: "30-Day Product Sales Trend",
                 labels: dates,
-                datasets: [{ label: "Daily Revenue ($)", data: revs, color: "#3b82f6" }]
+                datasets: [{ label: "Daily Revenue ($)", data: revs, color: "#0F766E" }]
             };
             renderSVGChart("modal-sales-chart", chartSpec);
 
@@ -431,7 +424,6 @@ document.addEventListener("DOMContentLoaded", () => {
             const res = await fetch(`/api/analytics/charts?days=${state.salesTimeframe}&store_id=${state.selectedStore}`);
             const data = await res.json();
 
-            // KPIs
             const revSum = data.revenue_trend.datasets[0].data.reduce((a, b) => a + b, 0);
             const unitSum = data.units_trend.datasets[0].data.reduce((a, b) => a + b, 0);
             const dailyAvg = revSum / Math.max(1, data.revenue_trend.labels.length);
@@ -443,24 +435,22 @@ document.addEventListener("DOMContentLoaded", () => {
             const topCatName = data.category_chart.labels[0] || "Electronics";
             document.getElementById("sales-kpi-top-cat").textContent = topCatName;
 
-            // Render 5 SVG Charts
             renderSVGChart("chart-sales-revenue", data.revenue_trend);
             renderSVGChart("chart-sales-units", data.units_trend);
             renderSVGChart("chart-sales-category", data.category_chart);
             renderSVGChart("chart-sales-top-products", data.top_products_chart);
             renderSVGChart("chart-sales-store", data.store_chart);
 
-            // Chart 6: Spikes & Drops Highlights
             const spikesContainer = document.getElementById("spikes-drops-container");
             let highlightsHTML = "";
             if (data.spikes && data.spikes.length > 0) {
                 highlightsHTML += data.spikes.slice(0, 3).map(s => `
                     <div class="trend-card">
                         <div>
-                            <strong>SPIKE: ${s.product_name}</strong> (${s.category})
+                            <strong>SPIKE: ${s.product_name}</strong>
                             <div style="font-size: 11px; color: var(--text-muted);">${s.prev_units_30d} → ${s.curr_units_30d} units</div>
                         </div>
-                        <span class="badge badge-healthy">+${s.pct_change_units}%</span>
+                        <span class="badge badge-success">+${s.pct_change_units}%</span>
                     </div>
                 `).join("");
             }
@@ -468,7 +458,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 highlightsHTML += data.drops.slice(0, 3).map(d => `
                     <div class="trend-card">
                         <div>
-                            <strong>DROP: ${d.product_name}</strong> (${d.category})
+                            <strong>DROP: ${d.product_name}</strong>
                             <div style="font-size: 11px; color: var(--text-muted);">${d.prev_units_30d} → ${d.curr_units_30d} units</div>
                         </div>
                         <span class="badge badge-critical">${d.pct_change_units}%</span>
@@ -478,7 +468,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
             spikesContainer.innerHTML = highlightsHTML || '<div style="font-size:12px; color:var(--text-muted);">No major sales spikes/drops detected.</div>';
 
-            // AI Insights List
             const insightsContainer = document.getElementById("sales-insights-container");
             insightsContainer.innerHTML = data.insights.map(ins => `
                 <div class="insight-chip-item">${ins}</div>
@@ -489,7 +478,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // PURE SVG CHART RENDER ENGINE
+    // PURE SVG CHART RENDER ENGINE (Light Theme Optimized)
     function renderSVGChart(containerId, chartSpec) {
         const container = document.getElementById(containerId);
         if (!container || !chartSpec || !chartSpec.labels || chartSpec.labels.length === 0) {
@@ -505,7 +494,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const labels = chartSpec.labels;
         const dataset = chartSpec.datasets[0];
         const dataVals = dataset.data;
-        const mainColor = dataset.color || "#3b82f6";
+        const mainColor = "#0F766E";
 
         if (type === "line" || type === "area") {
             const maxVal = Math.max(...dataVals) || 100;
@@ -518,7 +507,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const fillHTML = type === "area" ? `
                 <defs>
                     <linearGradient id="areaGrad_${containerId}" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="${mainColor}" stop-opacity="0.35"/>
+                        <stop offset="0%" stop-color="${mainColor}" stop-opacity="0.25"/>
                         <stop offset="100%" stop-color="${mainColor}" stop-opacity="0.0"/>
                     </linearGradient>
                 </defs>
@@ -527,13 +516,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const svgHTML = `
                 <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%; overflow: visible;">
-                    <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#2d3748" stroke-width="1" />
-                    <line x1="${padding}" y1="${padding}" x2="${width - padding}" y2="${padding}" stroke="#2d3748" stroke-dasharray="4" stroke-width="1" />
+                    <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#E2E8F0" stroke-width="1" />
+                    <line x1="${padding}" y1="${padding}" x2="${width - padding}" y2="${padding}" stroke="#E2E8F0" stroke-dasharray="4" stroke-width="1" />
                     ${fillHTML}
-                    <polyline fill="none" stroke="${mainColor}" stroke-width="2.5" points="${points}" />
-                    <text x="${padding}" y="${padding - 8}" fill="#9ca3af" font-size="10">$${Math.round(maxVal).toLocaleString()}</text>
-                    <text x="${padding}" y="${height - 8}" fill="#9ca3af" font-size="10">${labels[0]}</text>
-                    <text x="${width - padding - 45}" y="${height - 8}" fill="#9ca3af" font-size="10">${labels[labels.length - 1]}</text>
+                    <polyline fill="none" stroke="${mainColor}" stroke-width="2" points="${points}" />
+                    <text x="${padding}" y="${padding - 8}" fill="#64748B" font-size="10">$${Math.round(maxVal).toLocaleString()}</text>
+                    <text x="${padding}" y="${height - 8}" fill="#64748B" font-size="10">${labels[0]}</text>
+                    <text x="${width - padding - 45}" y="${height - 8}" fill="#64748B" font-size="10">${labels[labels.length - 1]}</text>
                 </svg>
             `;
             container.innerHTML = svgHTML;
@@ -548,14 +537,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 const y = height - padding - barHeight;
                 const w = barWidth * 0.7;
                 return `
-                    <rect x="${x}" y="${y}" width="${w}" height="${barHeight}" fill="${mainColor}" rx="4" />
-                    <text x="${x + w/2}" y="${height - 10}" fill="#9ca3af" font-size="9" text-anchor="middle">${labels[i] ? labels[i].substring(0, 6) : ''}</text>
+                    <rect x="${x}" y="${y}" width="${w}" height="${barHeight}" fill="${mainColor}" rx="3" />
+                    <text x="${x + w/2}" y="${height - 10}" fill="#64748B" font-size="9" text-anchor="middle">${labels[i] ? labels[i].substring(0, 8) : ''}</text>
                 `;
             }).join("");
 
             container.innerHTML = `
                 <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%;">
-                    <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#2d3748" stroke-width="1" />
+                    <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#E2E8F0" stroke-width="1" />
                     ${barsHTML}
                 </svg>
             `;
@@ -565,13 +554,14 @@ document.addEventListener("DOMContentLoaded", () => {
             const barHeight = (height - 2 * padding) / dataVals.length;
 
             const barsHTML = dataVals.map((v, i) => {
-                const barWidth = (v / maxVal) * (width - 160);
+                const barWidth = (v / maxVal) * (width - 170);
                 const y = padding + i * barHeight + barHeight * 0.15;
                 const h = barHeight * 0.7;
+                const displayLabel = labels[i] ? (labels[i].length > 18 ? labels[i].substring(0, 16) + "..." : labels[i]) : '';
                 return `
-                    <text x="10" y="${y + h/1.4}" fill="#9ca3af" font-size="10">${labels[i] ? labels[i].substring(0, 14) : ''}</text>
-                    <rect x="130" y="${y}" width="${barWidth}" height="${h}" fill="${mainColor}" rx="4" />
-                    <text x="${140 + barWidth}" y="${y + h/1.4}" fill="#ffffff" font-size="10" font-weight="600">$${Math.round(v).toLocaleString()}</text>
+                    <text x="10" y="${y + h/1.4}" fill="#475569" font-size="10">${displayLabel}</text>
+                    <rect x="150" y="${y}" width="${barWidth}" height="${h}" fill="${mainColor}" rx="3" />
+                    <text x="${156 + barWidth}" y="${y + h/1.4}" fill="#0F172A" font-size="10" font-weight="600">${typeof v === 'number' ? '$' + Math.round(v).toLocaleString() : v}</text>
                 `;
             }).join("");
 
@@ -583,30 +573,36 @@ document.addEventListener("DOMContentLoaded", () => {
         } else if (type === "donut") {
             container.innerHTML = `
                 <div style="display:flex; align-items:center; gap:16px; height:100%; justify-content:center;">
-                    <svg viewBox="0 0 100 100" style="width:120px; height:120px;">
-                        <circle cx="50" cy="50" r="38" fill="none" stroke="#2d3748" stroke-width="14"/>
-                        <circle cx="50" cy="50" r="38" fill="none" stroke="${mainColor}" stroke-width="14" stroke-dasharray="180 240" transform="rotate(-90 50 50)"/>
+                    <svg viewBox="0 0 100 100" style="width:110px; height:110px;">
+                        <circle cx="50" cy="50" r="38" fill="none" stroke="#E2E8F0" stroke-width="12"/>
+                        <circle cx="50" cy="50" r="38" fill="none" stroke="${mainColor}" stroke-width="12" stroke-dasharray="180 240" transform="rotate(-90 50 50)"/>
                     </svg>
-                    <div style="font-size:12px; color:var(--text-muted);">
-                        ${labels.map((l, i) => `<div><span style="color:${dataset.colors ? dataset.colors[i] : mainColor}">●</span> ${l}: <strong>${dataVals[i]}</strong></div>`).join("")}
+                    <div style="font-size:11px; color:var(--text-secondary);">
+                        ${labels.map((l, i) => `<div><span style="color:${mainColor}">●</span> ${l}: <strong>${dataVals[i]}</strong></div>`).join("")}
                     </div>
                 </div>
             `;
         }
     }
 
-    // AI COPILOT SETUP & CHAT ENGINE
+    // AI COPILOT SETUP & EXECUTIVE REPORT RENDERER
     function setupCopilot() {
         const form = document.getElementById("chat-form");
         const input = document.getElementById("chat-input");
         const pills = document.querySelectorAll(".prompt-pill");
+        const suggCards = document.querySelectorAll(".suggestion-card");
+
+        const handlePromptClick = (promptText) => {
+            input.value = promptText;
+            sendChatQuery(promptText);
+        };
 
         pills.forEach(pill => {
-            pill.addEventListener("click", () => {
-                const prompt = pill.getAttribute("data-prompt");
-                input.value = prompt;
-                sendChatQuery(prompt);
-            });
+            pill.addEventListener("click", () => handlePromptClick(pill.getAttribute("data-prompt")));
+        });
+
+        suggCards.forEach(card => {
+            card.addEventListener("click", () => handlePromptClick(card.getAttribute("data-prompt")));
         });
 
         form.addEventListener("submit", (e) => {
@@ -620,15 +616,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function sendChatQuery(userQuery) {
         const messagesContainer = document.getElementById("chat-messages-container");
+        const welcomeCard = document.getElementById("copilot-welcome-card");
         const loadingCard = document.getElementById("ai-loading-indicator");
 
-        // User message
+        // Hide landing card if present
+        if (welcomeCard) welcomeCard.style.display = "none";
+
+        // User Message
         const userMsgDiv = document.createElement("div");
         userMsgDiv.className = "chat-message user-message";
         userMsgDiv.innerHTML = `<div>${userQuery}</div>`;
         messagesContainer.appendChild(userMsgDiv);
 
-        // Show Multi-step AI indicator
+        // Show Multi-step thinking indicator
         loadingCard.classList.remove("hidden");
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
@@ -661,17 +661,17 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (err) {
             loadingCard.classList.add("hidden");
             assistantMsgDiv.querySelector(".message-content").innerHTML = `
-                <div style="color: var(--status-critical);">Error executing query. Please check application logs.</div>
+                <div style="color: var(--status-critical);">Error executing query. Please check server logs.</div>
             `;
         }
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
-    // Render Grounded Response with Dynamic Charting & Evidence
+    // Render Executive BI Report Card in Chat
     function renderCopilotResponse(msgElement, data) {
         const isSufficient = data.data_sufficiency === "sufficient";
         const sufficiencyBadge = isSufficient ? 
-            `<span class="badge badge-healthy">✔ Data Grounded & Sufficient</span>` : 
+            `<span class="badge badge-success">✔ Data Grounded & Sufficient</span>` : 
             `<span class="badge badge-warning">⚠️ Data Insufficient - Cause Unverified</span>`;
 
         let metricsHTML = "";
@@ -679,9 +679,9 @@ document.addEventListener("DOMContentLoaded", () => {
             metricsHTML = `
                 <div style="display:flex; flex-wrap:wrap; gap:8px; margin: 10px 0;">
                     ${data.key_metrics.map(m => `
-                        <div style="background:var(--bg-dark); border:1px solid var(--border-color); padding:6px 12px; border-radius:6px; font-size:12px;">
+                        <div style="background:var(--bg-light); border:1px solid var(--border-color); padding:6px 12px; border-radius:6px; font-size:11px;">
                             <div style="color:var(--text-muted); font-size:10px;">${m.label}</div>
-                            <div style="font-weight:700; color:#fff;">${m.value}</div>
+                            <div style="font-weight:700; color:var(--text-primary);">${m.value}</div>
                         </div>
                     `).join("")}
                 </div>
@@ -691,8 +691,8 @@ document.addEventListener("DOMContentLoaded", () => {
         let recsHTML = "";
         if (data.recommendations && data.recommendations.length > 0) {
             recsHTML = `
-                <div style="background:rgba(59,130,246,0.08); border-left:3px solid var(--accent-blue); padding:10px 14px; border-radius:6px; font-size:13px; margin:10px 0;">
-                    <div style="color:var(--accent-blue); font-weight:700; font-size:11px; text-transform:uppercase;">💡 Action Plan:</div>
+                <div style="background:var(--brand-emerald-bg); border-left:3px solid var(--brand-emerald); padding:10px 14px; border-radius:6px; font-size:12px; margin:10px 0; color:var(--text-secondary);">
+                    <div style="color:var(--brand-emerald); font-weight:700; font-size:11px; text-transform:uppercase;">💡 Action Plan:</div>
                     <ul style="padding-left:16px; margin-top:4px;">
                         ${data.recommendations.map(r => `<li>${r}</li>`).join("")}
                     </ul>
@@ -702,34 +702,36 @@ document.addEventListener("DOMContentLoaded", () => {
 
         let chartContainerId = `chat-chart-${Date.now()}`;
         let chartHTML = data.chart ? `
-            <div style="background:var(--bg-dark); border:1px solid var(--border-color); padding:14px; border-radius:8px; margin:12px 0;">
-                <div style="font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:8px;">${data.chart.title}</div>
-                <div id="${chartContainerId}" class="svg-chart-container" style="height:170px;"></div>
+            <div style="background:var(--bg-light); border:1px solid var(--border-color); padding:14px; border-radius:8px; margin:12px 0;">
+                <div style="font-size:12px; font-weight:700; color:var(--text-primary); margin-bottom:8px;">${data.chart.title}</div>
+                <div id="${chartContainerId}" class="svg-chart-container" style="height:160px;"></div>
             </div>
         ` : "";
 
         let evidenceHTML = "";
         if (data.evidence && data.evidence.length > 0) {
             evidenceHTML = `
-                <div style="background:var(--bg-dark); border:1px solid var(--border-color); padding:12px; border-radius:6px; font-size:11px; margin-top:10px;">
-                    <div style="color:var(--text-muted); font-weight:700; text-transform:uppercase; margin-bottom:6px;">🔍 Supporting Evidence:</div>
-                    ${data.evidence.map(e => `
-                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:6px; background:var(--bg-card); padding:6px 10px; border-radius:4px; margin-bottom:4px;">
-                            <div><strong>Product:</strong> ${e.product_name}</div>
-                            <div><strong>Store:</strong> ${e.store_name}</div>
-                            <div><strong>Stock:</strong> ${e.current_stock}</div>
-                            <div><strong>Avg Daily:</strong> ${e.avg_daily_sales}</div>
-                            <div><strong>Days Remaining:</strong> ${e.days_remaining}</div>
-                        </div>
-                    `).join("")}
-                </div>
+                <details style="margin-top:10px; font-size:11px; color:var(--text-muted);">
+                    <summary style="cursor:pointer; font-weight:600; color:var(--text-secondary);">▸ Supporting Evidence Details (${data.evidence.length} items)</summary>
+                    <div style="margin-top:8px; display:flex; flex-direction:column; gap:4px;">
+                        ${data.evidence.map(e => `
+                            <div style="background:var(--bg-light); border:1px solid var(--border-color); padding:6px 10px; border-radius:4px; display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:4px;">
+                                <div><strong>Product:</strong> ${e.product_name}</div>
+                                <div><strong>Store:</strong> ${e.store_name}</div>
+                                <div><strong>Stock:</strong> ${e.current_stock}</div>
+                                <div><strong>Avg Sales:</strong> ${e.avg_daily_sales}</div>
+                                <div><strong>Days Left:</strong> ${e.days_remaining}</div>
+                            </div>
+                        `).join("")}
+                    </div>
+                </details>
             `;
         }
 
         let assumptionsHTML = "";
         if (data.assumptions && data.assumptions.length > 0) {
             assumptionsHTML = `
-                <div style="font-size:11px; color:var(--text-dim); margin-top:8px;">
+                <div style="font-size:10px; color:var(--text-dim); margin-top:6px;">
                     <strong>Assumptions Used:</strong> ${data.assumptions.join(" | ")}
                 </div>
             `;
@@ -737,7 +739,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         msgElement.querySelector(".message-content").innerHTML = `
             ${sufficiencyBadge}
-            <div style="font-size: 14px; line-height: 1.6; color: var(--text-main); margin-top:8px;">
+            <div style="font-size: 13px; line-height: 1.6; color: var(--text-primary); margin-top:8px;">
                 ${data.answer}
             </div>
             ${metricsHTML}
@@ -747,7 +749,6 @@ document.addEventListener("DOMContentLoaded", () => {
             ${assumptionsHTML}
         `;
 
-        // Render embedded chart if provided
         if (data.chart) {
             setTimeout(() => {
                 renderSVGChart(chartContainerId, data.chart);
