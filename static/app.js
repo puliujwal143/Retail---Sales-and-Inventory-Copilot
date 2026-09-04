@@ -1,14 +1,16 @@
-// RetailIQ Enterprise B2B Frontend Engine - Fixed Layout & ID Matching
+// RetailIQ Enterprise B2B Frontend Engine - Extended Multi-Feature & Date Snapshot System
 document.addEventListener("DOMContentLoaded", () => {
     // Global State
     const state = {
         currentTab: "dashboard",
         selectedStore: "all",
+        selectedDate: null,
         dashboardTimeframe: 30,
         salesTimeframe: 30,
         inventoryData: [],
         dashboardData: null,
-        storesData: []
+        storesData: [],
+        compareSelectedStores: ["STR001", "STR002", "STR003"]
     };
 
     // DOM References
@@ -16,6 +18,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const tabViews = document.querySelectorAll(".tab-view");
     const globalStoreSelect = document.getElementById("global-store-select");
     const globalSearchInput = document.getElementById("global-search-input");
+    const globalDateSelect = document.getElementById("global-date-select");
+    const globalDatePicker = document.getElementById("global-date-picker");
 
     // Product Modal References
     const productModal = document.getElementById("product-detail-modal");
@@ -27,18 +31,28 @@ document.addEventListener("DOMContentLoaded", () => {
     async function init() {
         setupNavigation();
         setupFilters();
+        setupDateSnapshot();
         setupCopilotTab();
         setupProductModal();
+        setupReorderPlanner();
+        setupStoreComparison();
 
         await loadStores();
+        await loadAllViews();
+    }
+
+    async function loadAllViews() {
         await loadDashboard();
         await loadInventory();
         await loadSalesWorkspace();
+        await loadReorderPlanner();
+        await loadDecisionCenter();
+        await loadStoreComparison();
+        await loadExecutiveReport();
     }
 
     // Navigation & Tab Switching
     function setupNavigation() {
-        // Navigation buttons & Quick jump buttons
         document.querySelectorAll(".nav-item, .quick-jump, .panel-link-btn, .btn-ask-copilot").forEach(btn => {
             btn.addEventListener("click", () => {
                 const targetTab = btn.getAttribute("data-tab");
@@ -89,15 +103,53 @@ document.addEventListener("DOMContentLoaded", () => {
         state.currentTab = tabId;
     }
 
+    // Date Snapshot Picker System
+    function setupDateSnapshot() {
+        if (!globalDateSelect) return;
+
+        globalDateSelect.addEventListener("change", (e) => {
+            const val = e.target.value;
+            const now = new Date();
+
+            if (val === "today") {
+                state.selectedDate = null;
+                globalDatePicker.style.display = "none";
+            } else if (val === "yesterday") {
+                const d = new Date(now); d.setDate(d.getDate() - 1);
+                state.selectedDate = d.toISOString().split("T")[0];
+                globalDatePicker.style.display = "none";
+            } else if (val === "7d") {
+                const d = new Date(now); d.setDate(d.getDate() - 7);
+                state.selectedDate = d.toISOString().split("T")[0];
+                globalDatePicker.style.display = "none";
+            } else if (val === "30d") {
+                const d = new Date(now); d.setDate(d.getDate() - 30);
+                state.selectedDate = d.toISOString().split("T")[0];
+                globalDatePicker.style.display = "none";
+            } else if (val === "custom") {
+                globalDatePicker.style.display = "inline-block";
+                return;
+            }
+            loadAllViews();
+        });
+
+        if (globalDatePicker) {
+            globalDatePicker.addEventListener("change", (e) => {
+                if (e.target.value) {
+                    state.selectedDate = e.target.value;
+                    loadAllViews();
+                }
+            });
+        }
+    }
+
     function setupFilters() {
         if (globalStoreSelect) {
             globalStoreSelect.addEventListener("change", (e) => {
                 state.selectedStore = e.target.value;
                 const salesStoreSel = document.getElementById("sales-store-select");
                 if (salesStoreSel) salesStoreSel.value = e.target.value;
-                loadDashboard();
-                renderInventoryTable();
-                loadSalesWorkspace();
+                loadAllViews();
             });
         }
 
@@ -134,7 +186,7 @@ document.addEventListener("DOMContentLoaded", () => {
             salesStore.addEventListener("change", (e) => {
                 state.selectedStore = e.target.value;
                 if (globalStoreSelect) globalStoreSelect.value = e.target.value;
-                loadSalesWorkspace();
+                loadAllViews();
             });
         }
     }
@@ -217,7 +269,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Load Executive Dashboard Data
     async function loadDashboard() {
         try {
-            const url = `/api/dashboard?store_id=${state.selectedStore}`;
+            let url = `/api/dashboard?store_id=${state.selectedStore}`;
+            if (state.selectedDate) url += `&date=${state.selectedDate}`;
+
             const res = await fetch(url);
             const data = await res.json();
             state.dashboardData = data;
@@ -261,7 +315,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function loadDashboardChartOnly() {
         try {
-            const res = await fetch(`/api/analytics/charts?days=${state.dashboardTimeframe}&store_id=${state.selectedStore}`);
+            let url = `/api/analytics/charts?days=${state.dashboardTimeframe}&store_id=${state.selectedStore}`;
+            if (state.selectedDate) url += `&date=${state.selectedDate}`;
+            const res = await fetch(url);
             const data = await res.json();
             renderSVGChart("dashboard-sales-chart", data.revenue_trend);
         } catch (err) {
@@ -401,7 +457,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Load Inventory Data
     async function loadInventory() {
         try {
-            const res = await fetch("/api/inventory");
+            let url = `/api/inventory?store_id=${state.selectedStore}`;
+            if (state.selectedDate) url += `&date=${state.selectedDate}`;
+            const res = await fetch(url);
             state.inventoryData = await res.json();
 
             const total = state.inventoryData.length;
@@ -512,7 +570,9 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("modal-prod-name").textContent = "Loading...";
 
         try {
-            const res = await fetch(`/api/products/${productId}?store_id=${storeId}`);
+            let url = `/api/products/${productId}?store_id=${storeId}`;
+            if (state.selectedDate) url += `&date=${state.selectedDate}`;
+            const res = await fetch(url);
             const data = await res.json();
 
             document.getElementById("modal-prod-name").textContent = data.product.product_name;
@@ -564,7 +624,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Load Sales Analytics Workspace Data
     async function loadSalesWorkspace() {
         try {
-            const res = await fetch(`/api/analytics/charts?days=${state.salesTimeframe}&store_id=${state.selectedStore}`);
+            let url = `/api/analytics/charts?days=${state.salesTimeframe}&store_id=${state.selectedStore}`;
+            if (state.selectedDate) url += `&date=${state.selectedDate}`;
+            const res = await fetch(url);
             const data = await res.json();
 
             const revSum = data.revenue_trend.datasets[0].data.reduce((a, b) => a + b, 0);
@@ -629,7 +691,255 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Mini Sparkline Renderer inside KPI cards
+    // Load Intelligent Reorder Planner
+    function setupReorderPlanner() {
+        const prioritySel = document.getElementById("reorder-filter-priority");
+        const categorySel = document.getElementById("reorder-filter-category");
+        const exportBtn = document.getElementById("btn-export-reorder");
+
+        if (prioritySel) prioritySel.addEventListener("change", loadReorderPlanner);
+        if (categorySel) categorySel.addEventListener("change", loadReorderPlanner);
+
+        if (exportBtn) {
+            exportBtn.addEventListener("click", async () => {
+                const res = await fetch(`/api/reorder-plan?store_id=${state.selectedStore}`);
+                const data = await res.json();
+                
+                let csv = "Priority,Product,Store,Current Stock,Avg Daily Sales,Days Remaining,Target Coverage,Recommended Reorder\n";
+                data.forEach(r => {
+                    csv += `"${r.reorder_priority}","${r.product_name}","${r.store_name}",${r.current_stock},${r.average_daily_sales.toFixed(1)},${r.days_remaining},7 days,${r.recommended_reorder}\n`;
+                });
+
+                const blob = new Blob([csv], { type: "text/csv" });
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = `RetailIQ_Reorder_Plan_${state.selectedDate || 'Today'}.csv`;
+                link.click();
+            });
+        }
+    }
+
+    async function loadReorderPlanner() {
+        const tbody = document.getElementById("reorder-tbody");
+        if (!tbody) return;
+
+        try {
+            const prioritySel = document.getElementById("reorder-filter-priority");
+            const categorySel = document.getElementById("reorder-filter-category");
+            
+            const priorityVal = prioritySel ? prioritySel.value : "all";
+            const categoryVal = categorySel ? categorySel.value : "all";
+
+            let url = `/api/reorder-plan?store_id=${state.selectedStore}&priority=${priorityVal}&category=${categoryVal}`;
+            if (state.selectedDate) url += `&date=${state.selectedDate}`;
+
+            const res = await fetch(url);
+            const data = await res.json();
+
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--text-muted);">No items match reorder criteria. All stock levels healthy!</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(r => `
+                <tr data-product-id="${r.product_id}" data-store-id="${r.store_id}">
+                    <td><span class="badge ${r.reorder_priority === 'CRITICAL' ? 'badge-critical' : 'badge-warning'}">${r.reorder_priority}</span></td>
+                    <td><strong>${r.product_name}</strong></td>
+                    <td>${r.store_name}</td>
+                    <td class="text-right"><strong>${r.current_stock}</strong></td>
+                    <td class="text-right">${r.average_daily_sales.toFixed(1)} / day</td>
+                    <td class="text-right">${r.days_remaining} days</td>
+                    <td>7 days target</td>
+                    <td class="text-right"><strong style="color:var(--brand-teal); font-size:13px;">+${r.recommended_reorder} units</strong></td>
+                </tr>
+            `).join("");
+
+            tbody.querySelectorAll("tr[data-product-id]").forEach(row => {
+                row.addEventListener("click", () => {
+                    openProductDetailModal(row.getAttribute("data-product-id"), row.getAttribute("data-store-id"));
+                });
+            });
+
+        } catch (err) {
+            console.error("Failed to load reorder planner:", err);
+        }
+    }
+
+    // Load Decision Center
+    async function loadDecisionCenter() {
+        const container = document.getElementById("decision-center-container");
+        if (!container) return;
+
+        try {
+            let url = "/api/decision-center";
+            if (state.selectedDate) url += `?date=${state.selectedDate}`;
+            const res = await fetch(url);
+            const items = await res.json();
+
+            if (!items || items.length === 0) {
+                container.innerHTML = '<div style="padding:20px; color:var(--text-muted);">No critical operational decisions required.</div>';
+                return;
+            }
+
+            container.innerHTML = items.map(d => `
+                <div class="decision-card ${d.priority}">
+                    <div class="decision-header">
+                        <div class="decision-title">${d.title}</div>
+                        <span class="badge ${d.priority === 'CRITICAL' ? 'badge-critical' : (d.priority === 'HIGH' ? 'badge-warning' : 'badge-info')}">${d.priority}</span>
+                    </div>
+                    <div class="decision-body">
+                        <div><strong>Issue:</strong> ${d.issue}</div>
+                        <div><strong>Impact:</strong> ${d.impact}</div>
+                    </div>
+                    <div class="decision-action-box">
+                        <span><strong>Recommended Action:</strong> ${d.action}</span>
+                        <button class="alert-action-btn" onclick="alert('Action executing for ${d.title.replace(/'/g, "\\'")}!')">Execute Action →</button>
+                    </div>
+                    <div class="decision-evidence">🔍 Evidence: ${d.evidence}</div>
+                </div>
+            `).join("");
+        } catch (err) {
+            console.error("Failed to load decision center:", err);
+        }
+    }
+
+    // Store Comparison Setup
+    function setupStoreComparison() {
+        const checkboxesDiv = document.getElementById("compare-store-checkboxes");
+        const btnRun = document.getElementById("btn-run-comparison");
+
+        if (checkboxesDiv && state.storesData) {
+            checkboxesDiv.innerHTML = state.storesData.map(s => `
+                <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
+                    <input type="checkbox" value="${s.store_id}" ${state.compareSelectedStores.includes(s.store_id) ? 'checked' : ''}>
+                    ${s.store_name}
+                </label>
+            `).join("");
+        }
+
+        if (btnRun) {
+            btnRun.addEventListener("click", () => {
+                const checked = Array.from(checkboxesDiv.querySelectorAll("input:checked")).map(i => i.value);
+                if (checked.length > 0) {
+                    state.compareSelectedStores = checked;
+                    loadStoreComparison();
+                } else {
+                    alert("Please select at least one store to compare.");
+                }
+            });
+        }
+    }
+
+    async function loadStoreComparison() {
+        const container = document.getElementById("compare-matrix-container");
+        if (!container) return;
+
+        try {
+            const storeIdsStr = state.compareSelectedStores.join(",");
+            let url = `/api/compare-stores?store_ids=${storeIdsStr}&days=30`;
+            if (state.selectedDate) url += `&date=${state.selectedDate}`;
+
+            const res = await fetch(url);
+            const data = await res.json();
+
+            const tableRowsHTML = data.comparison_table.map(s => `
+                <tr>
+                    <td><strong>${s.store_name}</strong><br><span style="font-size:10px; color:var(--text-muted);">${s.location}</span></td>
+                    <td class="text-right"><strong>$${s.total_revenue.toLocaleString('en-US', {minimumFractionDigits:2})}</strong></td>
+                    <td class="text-right">${s.units_sold.toLocaleString()} units</td>
+                    <td class="text-right">$${s.avg_daily_revenue.toLocaleString('en-US', {minimumFractionDigits:2})}/day</td>
+                    <td><span class="badge badge-critical">${s.critical_items} Critical</span></td>
+                    <td><span class="badge badge-info">${s.overstock_items} Overstock</span></td>
+                </tr>
+            `).join("");
+
+            container.innerHTML = `
+                <div class="panel chart-span-2">
+                    <div class="panel-header">
+                        <h3>Side-by-Side Revenue Trajectory</h3>
+                        <span class="subtitle">Comparing ${data.stores_count} selected stores</span>
+                    </div>
+                    <div id="chart-store-compare" class="svg-chart-container" style="height:230px;"></div>
+                </div>
+
+                <div class="panel chart-span-2">
+                    <div class="panel-header">
+                        <h3>Store Performance Matrix</h3>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>STORE</th>
+                                    <th class="text-right">REVENUE (30D)</th>
+                                    <th class="text-right">UNITS SOLD</th>
+                                    <th class="text-right">AVG DAILY REVENUE</th>
+                                    <th>STOCK RISKS</th>
+                                    <th>OVERSTOCK</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${tableRowsHTML}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            renderSVGChart("chart-store-compare", data.comparison_chart);
+        } catch (err) {
+            console.error("Failed to load store comparison:", err);
+        }
+    }
+
+    // Load Executive BI Report
+    async function loadExecutiveReport() {
+        const container = document.getElementById("executive-report-container");
+        if (!container) return;
+
+        try {
+            let url = `/api/executive-report?store_id=${state.selectedStore}`;
+            if (state.selectedDate) url += `&date=${state.selectedDate}`;
+            const res = await fetch(url);
+            const rep = await res.json();
+
+            const kpis = rep.kpis;
+            container.innerHTML = `
+                <div style="border-bottom:2px solid var(--brand-teal); padding-bottom:12px; margin-bottom:16px;">
+                    <h2 style="font-size:20px; color:var(--text-primary);">${rep.report_title}</h2>
+                    <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
+                        Date Context: <strong>${rep.generated_date}</strong> | Store Scope: <strong>${rep.store_scope}</strong>
+                    </div>
+                </div>
+
+                <div class="kpi-grid" style="margin-bottom:20px;">
+                    <div class="kpi-card"><div class="kpi-title">TOTAL REVENUE</div><div class="kpi-value">$${kpis.total_revenue.toLocaleString('en-US', {minimumFractionDigits:2})}</div></div>
+                    <div class="kpi-card"><div class="kpi-title">UNITS SOLD</div><div class="kpi-value">${kpis.total_units_sold.toLocaleString()}</div></div>
+                    <div class="kpi-card"><div class="kpi-title">VALUATION</div><div class="kpi-value">$${kpis.total_inventory_valuation.toLocaleString('en-US', {minimumFractionDigits:2})}</div></div>
+                    <div class="kpi-card highlight-critical"><div class="kpi-title">CRITICAL SKUs</div><div class="kpi-value">${kpis.critical_low_stock_count}</div></div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+                    <div>
+                        <h4 style="font-size:13px; font-weight:700; margin-bottom:8px;">Top Performing SKUs</h4>
+                        <ul style="font-size:12px; line-height:1.6; padding-left:16px;">
+                            ${rep.top_products.map(p => `<li><strong>${p.product_name}</strong>: $${p.revenue.toLocaleString()} (${p.units_sold} units)</li>`).join("")}
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 style="font-size:13px; font-weight:700; margin-bottom:8px;">Operational Reorder Recommendations</h4>
+                        <ul style="font-size:12px; line-height:1.6; padding-left:16px;">
+                            ${rep.recommended_reorders.slice(0, 4).map(r => `<li><strong>${r.product_name}</strong> (${r.store_name}): +${r.recommended_reorder} units</li>`).join("")}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        } catch (err) {
+            console.error("Failed to load executive report:", err);
+        }
+    }
+
+    // Mini Sparkline Renderer
     function renderMiniSparkline(containerId, dataVals, color = "#087F80") {
         const container = document.getElementById(containerId);
         if (!container || !dataVals || dataVals.length === 0) return;
@@ -658,7 +968,7 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
     }
 
-    // SVG Chart Render Engine (Strict Height & Responsive Contained Specs)
+    // SVG Chart Render Engine (Supports multi-dataset store comparison curves)
     function renderSVGChart(containerId, chartSpec) {
         const container = document.getElementById(containerId);
         if (!container || !chartSpec || !chartSpec.labels || chartSpec.labels.length === 0) {
@@ -672,34 +982,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const type = chartSpec.type || "line";
         const labels = chartSpec.labels;
-        const dataset = chartSpec.datasets[0];
-        const dataVals = dataset.data;
-        const mainColor = "#087F80";
+        const datasets = chartSpec.datasets || [chartSpec.datasets[0]];
 
         if (type === "line" || type === "area") {
-            const maxVal = Math.max(...dataVals) || 100;
-            const points = dataVals.map((v, i) => {
-                const x = padding + (i / Math.max(1, dataVals.length - 1)) * (width - 2 * padding);
-                const y = height - padding - (v / maxVal) * (height - 2 * padding);
-                return `${x},${y}`;
-            }).join(" ");
+            let maxVal = 10;
+            datasets.forEach(ds => {
+                const m = Math.max(...ds.data.filter(v => v !== null && v !== undefined));
+                if (m > maxVal) maxVal = m;
+            });
 
-            const fillHTML = `
-                <defs>
-                    <linearGradient id="areaGrad_${containerId}" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="${mainColor}" stop-opacity="0.2"/>
-                        <stop offset="100%" stop-color="${mainColor}" stop-opacity="0.0"/>
-                    </linearGradient>
-                </defs>
-                <polygon points="${padding},${height - padding} ${points} ${width - padding},${height - padding}" fill="url(#areaGrad_${containerId})" />
-            `;
+            const polylinesHTML = datasets.map(ds => {
+                const color = ds.color || "#087F80";
+                const points = ds.data.map((v, i) => {
+                    if (v === null || v === undefined) return null;
+                    const x = padding + (i / Math.max(1, labels.length - 1)) * (width - 2 * padding);
+                    const y = height - padding - (v / maxVal) * (height - 2 * padding);
+                    return `${x},${y}`;
+                }).filter(p => p !== null).join(" ");
+
+                return `<polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" points="${points}" />`;
+            }).join("");
 
             const svgHTML = `
                 <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%; overflow: hidden;">
                     <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#E5EAF0" stroke-width="1" />
                     <line x1="${padding}" y1="${padding}" x2="${width - padding}" y2="${padding}" stroke="#E5EAF0" stroke-dasharray="4" stroke-width="1" />
-                    ${fillHTML}
-                    <polyline fill="none" stroke="${mainColor}" stroke-width="2.5" stroke-linecap="round" points="${points}" />
+                    ${polylinesHTML}
                     <text x="${padding}" y="${padding - 8}" fill="#64748B" font-size="10" font-weight="600">$${Math.round(maxVal).toLocaleString()}</text>
                     <text x="${padding}" y="${height - 6}" fill="#64748B" font-size="10">${labels[0]}</text>
                     <text x="${width - padding - 45}" y="${height - 6}" fill="#64748B" font-size="10">${labels[labels.length - 1]}</text>
@@ -708,6 +1016,7 @@ document.addEventListener("DOMContentLoaded", () => {
             container.innerHTML = svgHTML;
 
         } else if (type === "bar") {
+            const dataVals = datasets[0].data;
             const maxVal = Math.max(...dataVals) || 100;
             const barWidth = (width - 2 * padding) / dataVals.length;
 
@@ -717,7 +1026,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const y = height - padding - barHeight;
                 const w = barWidth * 0.7;
                 return `
-                    <rect x="${x}" y="${y}" width="${w}" height="${barHeight}" fill="${mainColor}" rx="3" />
+                    <rect x="${x}" y="${y}" width="${w}" height="${barHeight}" fill="${datasets[0].color || '#087F80'}" rx="3" />
                     <text x="${x + w/2}" y="${height - 6}" fill="#64748B" font-size="9" text-anchor="middle">${labels[i] ? labels[i].substring(0, 8) : ''}</text>
                 `;
             }).join("");
@@ -728,32 +1037,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     ${barsHTML}
                 </svg>
             `;
-
-        } else if (type === "horizontal_bar") {
-            const maxVal = Math.max(...dataVals) || 100;
-            const barHeight = (height - 2 * padding) / dataVals.length;
-
-            const barsHTML = dataVals.map((v, i) => {
-                const barWidth = (v / maxVal) * (width - 170);
-                const y = padding + i * barHeight + barHeight * 0.15;
-                const h = barHeight * 0.7;
-                const displayLabel = labels[i] ? (labels[i].length > 18 ? labels[i].substring(0, 16) + "..." : labels[i]) : '';
-                return `
-                    <text x="10" y="${y + h/1.4}" fill="#334155" font-size="10" font-weight="500">${displayLabel}</text>
-                    <rect x="150" y="${y}" width="${barWidth}" height="${h}" fill="${mainColor}" rx="3" />
-                    <text x="${156 + barWidth}" y="${y + h/1.4}" fill="#0F172A" font-size="10" font-weight="700">${typeof v === 'number' ? '$' + Math.round(v).toLocaleString() : v}</text>
-                `;
-            }).join("");
-
-            container.innerHTML = `
-                <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%;">
-                    ${barsHTML}
-                </svg>
-            `;
         }
     }
 
-    // AI Copilot Chat Execution
+    // AI COPILOT CHAT QUERY FUNCTION
     async function sendChatQuery(userQuery) {
         const messagesContainer = document.getElementById("chat-messages-container");
         const welcomeCard = document.getElementById("copilot-welcome-card");
@@ -771,7 +1058,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (loadingCard) loadingCard.classList.remove("hidden");
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
-        // Assistant Placeholder Message
+        // Assistant Message Placeholder
         const assistantMsgDiv = document.createElement("div");
         assistantMsgDiv.className = "chat-message assistant-message";
         assistantMsgDiv.innerHTML = `
@@ -789,7 +1076,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const res = await fetch("/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ question: userQuery, store_id: state.selectedStore })
+                body: JSON.stringify({ question: userQuery, store_id: state.selectedStore, target_date: state.selectedDate })
             });
 
             const data = await res.json();
@@ -805,7 +1092,7 @@ document.addEventListener("DOMContentLoaded", () => {
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
-    // Format Structured Executive BI Response inside Chat Message Box
+    // Render Grounded BI Executive Response in Chat
     function renderCopilotResponse(msgElement, data) {
         const isSufficient = data.data_sufficiency === "sufficient";
         const sufficiencyBadge = isSufficient ?

@@ -1186,3 +1186,105 @@ input, select, button, textarea {
     font-size: 11px;
     color: var(--text-muted);
 }
+
+/* Date Snapshot Picker Header Control */
+.date-snapshot-wrapper {
+    display: flex;
+    align-items: center;
+    background-color: var(--bg-light);
+    border: 1px solid var(--border-color);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+}
+
+/* Decision Center Cards */
+.decision-cards-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.decision-card {
+    background-color: #FFFFFF;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 16px 20px;
+    box-shadow: var(--shadow-subtle);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: all 0.15s ease;
+}
+
+.decision-card.CRITICAL {
+    border-left: 4px solid var(--status-critical);
+    background-color: #FEF2F2;
+}
+
+.decision-card.HIGH {
+    border-left: 4px solid var(--status-warning);
+    background-color: #FFFBEB;
+}
+
+.decision-card.MEDIUM {
+    border-left: 4px solid var(--brand-teal);
+    background-color: var(--brand-teal-bg);
+}
+
+.decision-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.decision-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.decision-body {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.decision-action-box {
+    background-color: #FFFFFF;
+    border: 1px solid var(--border-color);
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--brand-teal);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.decision-evidence {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* Printable Executive Report */
+@media print {
+    .sidebar, .top-header, .filter-toolbar button, .nav-menu {
+        display: none !important;
+    }
+    .app-layout {
+        display: block !important;
+    }
+    .main-content {
+        overflow: visible !important;
+    }
+    .tab-view {
+        display: block !important;
+        padding: 0 !important;
+    }
+    .printable-report-card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+}
+

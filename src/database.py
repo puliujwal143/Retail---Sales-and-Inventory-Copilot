@@ -34,8 +34,9 @@ def init_db(force: bool = False):
     products_csv = os.path.join(DATA_DIR, "products.csv")
     inventory_csv = os.path.join(DATA_DIR, "inventory.csv")
     sales_csv = os.path.join(DATA_DIR, "sales.csv")
+    movements_csv = os.path.join(DATA_DIR, "inventory_movements.csv")
 
-    if not os.path.exists(stores_csv):
+    if not os.path.exists(stores_csv) or not os.path.exists(movements_csv):
         # Auto generate if CSV missing
         from data.generate_data import generate_retail_dataset
         generate_retail_dataset()
@@ -44,12 +45,14 @@ def init_db(force: bool = False):
     df_products = pd.read_csv(products_csv)
     df_inventory = pd.read_csv(inventory_csv)
     df_sales = pd.read_csv(sales_csv)
+    df_movements = pd.read_csv(movements_csv)
 
     # Write to SQLite
     df_stores.to_sql("stores", conn, if_exists="replace", index=False)
     df_products.to_sql("products", conn, if_exists="replace", index=False)
     df_inventory.to_sql("inventory", conn, if_exists="replace", index=False)
     df_sales.to_sql("sales", conn, if_exists="replace", index=False)
+    df_movements.to_sql("inventory_movements", conn, if_exists="replace", index=False)
 
     # Create indexes for fast querying
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(date)")
@@ -57,10 +60,13 @@ def init_db(force: bool = False):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_sales_store ON sales(store_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_inventory_product ON inventory(product_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_inventory_store ON inventory(store_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_movements_date ON inventory_movements(date)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_movements_store ON inventory_movements(store_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_movements_prod ON inventory_movements(product_id)")
 
     conn.commit()
     conn.close()
-    print("SQLite database initialized successfully.")
+    print("SQLite database initialized successfully with historical inventory movements.")
 
 def query_df(sql: str, params: tuple = ()) -> pd.DataFrame:
     """Executes SQL query and returns result as a pandas DataFrame."""

@@ -266,3 +266,119 @@ def get_sales_analytics_charts(days: int = 30, store_id: Optional[str] = "all", 
         "drops": drops,
         "insights": insights
     }
+
+def compare_stores_analytics(store_ids: List[str], time_days: int = 30, target_date: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Compares selected stores side-by-side across revenue, units, growth, stock risks, and trend specs.
+    """
+    if not store_ids or len(store_ids) == 0:
+        store_ids = ["STR001", "STR002", "STR003"]
+
+    date_filter = ""
+    params = [time_days]
+    if target_date:
+        date_filter = "AND s.date <= ?"
+        params.append(target_date)
+
+    placeholders = ",".join(["?"] * len(store_ids))
+    params_stores = list(params) + list(store_ids)
+
+    # 1. Total Revenue & Units per Store
+    sql_stores = f"""
+        WITH max_date_cte AS (
+            SELECT COALESCE(?, MAX(date)) as ref_date FROM sales
+        )
+        SELECT 
+            st.store_id,
+            st.store_name,
+            st.location,
+            COALESCE(SUM(s.quantity), 0) as units_sold,
+            ROUND(COALESCE(SUM(s.total_revenue), 0), 2) as total_revenue
+        FROM stores st
+        LEFT JOIN sales s ON st.store_id = s.store_id 
+            AND s.date >= date((SELECT ref_date FROM max_date_cte), '-' || ? || ' days')
+            {date_filter}
+        WHERE st.store_id IN ({placeholders})
+        GROUP BY st.store_id, st.store_name, st.location
+        ORDER BY total_revenue DESC
+    """
+
+    sql_params = [target_date, time_days]
+    if target_date:
+        sql_params.append(target_date)
+    sql_params.extend(store_ids)
+
+    df_comp = query_df(sql_stores, tuple(sql_params))
+    
+    # 2. Inventory Health per Store
+    from src.inventory_rules import get_inventory_status_df
+    inv_df = get_inventory_status_df(target_date=target_date)
+
+    comparison_results = []
+    datasets_trend = []
+
+    # Get color palette for comparative charts
+    colors = ["#087F80", "#2563EB", "#D97706", "#8B5CF6", "#EC4899"]
+
+    for idx, s_id in enumerate(store_ids):
+        s_row = df_comp[df_comp["store_id"] == s_id]
+        if s_row.empty:
+            continue
+        s_data = s_row.iloc[0].to_dict()
+
+        # Filter inventory for store
+        s_inv = inv_df[inv_df["store_id"] == s_id] if not inv_df.empty else pd.DataFrame()
+        crit_count = len(s_inv[s_inv["status"].isin(["CRITICAL", "OUT_OF_STOCK"])]) if not s_inv.empty else 0
+        warn_count = len(s_inv[s_inv["status"] == "WARNING"]) if not s_inv.empty else 0
+        overstock_count = len(s_inv[s_inv["status"] == "OVERSTOCK"]) if not s_inv.empty else 0
+        healthy_count = len(s_inv[s_inv["status"] == "HEALTHY"]) if not s_inv.empty else 0
+
+        # Daily trend
+        daily_sql = f"""
+            SELECT date, ROUND(SUM(total_revenue), 2) as daily_rev
+            FROM sales
+            WHERE store_id = ? AND date >= date((SELECT COALESCE(?, MAX(date)) FROM sales), '-' || ? || ' days')
+            GROUP BY date ORDER BY date ASC
+        """
+        daily_params = [s_id, target_date, time_days]
+        df_daily = query_df(daily_sql, tuple(daily_params))
+        
+        dates_list = df_daily["date"].tolist() if not df_daily.empty else []
+        revs_list = df_daily["daily_rev"].tolist() if not df_daily.empty else []
+
+        s_data["critical_items"] = crit_count
+        s_data["warning_items"] = warn_count
+        s_data["overstock_items"] = overstock_count
+        s_data["healthy_items"] = healthy_count
+        s_data["avg_daily_revenue"] = round(s_data["total_revenue"] / max(1, time_days), 2)
+
+        comparison_results.append(s_data)
+
+        if dates_list:
+            datasets_trend.append({
+                "label": s_data["store_name"],
+                "data": revs_list,
+                "color": colors[idx % len(colors)]
+            })
+
+    # Sort comparison results by revenue
+    comparison_results.sort(key=lambda x: x["total_revenue"], reverse=True)
+
+    # Master dates list from top store
+    master_dates = dates_list if 'dates_list' in locals() else []
+
+    return {
+        "timeframe_days": time_days,
+        "target_date": target_date,
+        "stores_count": len(comparison_results),
+        "comparison_table": comparison_results,
+        "top_store": comparison_results[0]["store_name"] if comparison_results else "N/A",
+        "highest_risk_store": max(comparison_results, key=lambda x: x["critical_items"])["store_name"] if comparison_results else "N/A",
+        "comparison_chart": {
+            "type": "line",
+            "title": f"Store Revenue Comparison ({time_days} Days)",
+            "subtitle": "Daily revenue trajectory side-by-side",
+            "labels": master_dates,
+            "datasets": datasets_trend
+        }
+    }

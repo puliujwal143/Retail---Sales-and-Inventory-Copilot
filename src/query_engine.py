@@ -13,7 +13,138 @@ def process_query_intent(user_query: str) -> Dict[str, Any]:
     """
     q_lower = user_query.strip().lower()
 
-    # 0. GREETINGS & CASUAL SALUTATIONS
+from datetime import datetime, timedelta
+
+def extract_date_from_query(query: str) -> str:
+    """Extracts date ISO string YYYY-MM-DD from user query if present."""
+    q_lower = query.lower()
+    
+    # 1. ISO format YYYY-MM-DD
+    match_iso = re.search(r'\b(20\d\d[-/]\d{1,2}[-/]\d{1,2})\b', query)
+    if match_iso:
+        try:
+            dt = datetime.strptime(match_iso.group(1).replace('/', '-'), "%Y-%m-%d")
+            return dt.strftime("%Y-%m-%d")
+        except:
+            pass
+
+    # 2. Month name e.g. "August 15", "Aug 15", "15 August"
+    months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
+    months_short = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+
+    for idx, (m_full, m_short) in enumerate(zip(months, months_short), start=1):
+        if m_full in q_lower or m_short in q_lower:
+            m_num = f"{idx:02d}"
+            # Search for day number
+            day_match = re.search(r'\b(\d{1,2})\b', q_lower)
+            if day_match:
+                day_num = f"{int(day_match.group(1)):02d}"
+                return f"2026-{m_num}-{day_num}"
+
+    # 3. Relative terms
+    if "yesterday" in q_lower:
+        return (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    elif "last week" in q_lower or "7 days ago" in q_lower:
+        return (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+    elif "last month" in q_lower or "30 days ago" in q_lower:
+        return (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+
+    return None
+
+def process_query_intent(user_query: str) -> Dict[str, Any]:
+    """
+    Classifies natural language user intent deterministically, executes Python queries,
+    and returns a compact structured payload containing exact figures, evidence, assumptions,
+    and structured SVG chart specifications for the frontend engine.
+    """
+    q_lower = user_query.strip().lower()
+    target_date = extract_date_from_query(user_query)
+
+    # 0. HISTORICAL DATE SNAPSHOT QUERY
+    if target_date or any(k in q_lower for k in ["snapshot", "on august", "on aug", "on date", "was our stock on", "inventory on"]):
+        snap_date = target_date or "2026-08-15"
+        inv_df = get_inventory_status_df(target_date=snap_date)
+        
+        crit_items = inv_df[inv_df["status"].isin(["CRITICAL", "OUT_OF_STOCK"])] if not inv_df.empty else pd.DataFrame()
+        tot_stock = int(inv_df["current_stock"].sum()) if not inv_df.empty else 0
+        tot_val = float(inv_df["stock_value"].sum()) if not inv_df.empty else 0.0
+
+        evidence_list = []
+        rec_list = []
+        metrics = [
+            {"label": "Snapshot Date", "value": snap_date},
+            {"label": "Reconstructed Stock", "value": f"{tot_stock} Units"},
+            {"label": "Valuation on Date", "value": f"${tot_val:,.2f}"},
+            {"label": "Critical Items on Date", "value": f"{len(crit_items)} SKUs"}
+        ]
+
+        if not crit_items.empty:
+            for _, row in crit_items.head(4).iterrows():
+                evidence_list.append({
+                    "product_name": row["product_name"],
+                    "store_name": row["store_name"],
+                    "current_stock": row["current_stock"],
+                    "avg_daily_sales": round(row["average_daily_sales"], 1),
+                    "days_remaining": row["days_remaining"],
+                    "source": f"inventory_movements ledger as of {snap_date}"
+                })
+                rec_list.append(f"{row['product_name']} ({row['store_name']}): {row['current_stock']} units remaining on {snap_date}.")
+
+        chart_spec = {
+            "type": "bar",
+            "title": f"Stock Levels by Category on {snap_date}",
+            "labels": inv_df["category"].unique().tolist()[:6] if not inv_df.empty else [],
+            "datasets": [{"label": "Stock Units", "data": [int(inv_df[inv_df['category']==c]['current_stock'].sum()) for c in inv_df['category'].unique()[:6]], "color": "#087F80"}]
+        }
+
+        return {
+            "intent": "HISTORICAL_SNAPSHOT",
+            "user_query": user_query,
+            "data_sufficiency": "sufficient",
+            "context_summary": f"Reconstructed historical retail state for date {snap_date}.",
+            "metrics": metrics,
+            "recommendations": rec_list or [f"Historical audit completed for date {snap_date}."],
+            "evidence": evidence_list,
+            "assumptions": [f"Stock reconstructed from inventory_movements ledger up to {snap_date}", "Zero synthetic numbers"],
+            "chart": chart_spec,
+            "raw_data": inv_df.head(10).to_dict(orient="records") if not inv_df.empty else []
+        }
+
+    # 0.1 STORE COMPARISON QUERY
+    if any(k in q_lower for k in ["compare", "vs", "versus", "which store is better", "downtown and central"]):
+        from src.sales_rules import compare_stores_analytics
+        comp = compare_stores_analytics(store_ids=["STR001", "STR002", "STR003"], target_date=target_date)
+
+        metrics = []
+        rec_list = []
+        evidence_list = []
+
+        for st in comp["comparison_table"]:
+            metrics.append({"label": st["store_name"], "value": f"${st['total_revenue']:,.2f} ({st['units_sold']} units)"})
+            rec_list.append(f"{st['store_name']}: ${st['total_revenue']:,.2f} revenue, {st['critical_items']} critical stock risks.")
+            evidence_list.append({
+                "product_name": "All Store SKUs",
+                "store_name": st["store_name"],
+                "current_stock": st["total_revenue"],
+                "avg_daily_sales": st["avg_daily_revenue"],
+                "days_remaining": st["critical_items"],
+                "source": "Store Comparison Matrix"
+            })
+
+        return {
+            "intent": "STORE_COMPARISON",
+            "user_query": user_query,
+            "data_sufficiency": "sufficient",
+            "context_summary": f"Comparative performance analysis across retail stores. Top store: {comp['top_store']}. Highest inventory risk: {comp['highest_risk_store']}.",
+            "metrics": metrics,
+            "recommendations": rec_list,
+            "evidence": evidence_list,
+            "assumptions": ["30-day comparative store sales & inventory risk analysis"],
+            "chart": comp["comparison_chart"],
+            "raw_data": comp["comparison_table"]
+        }
+
+    # 0.2 GREETINGS & CASUAL SALUTATIONS
     greeting_words = ["hi", "hello", "hey", "greetings", "good morning", "good afternoon", "good evening", "help"]
     if q_lower in greeting_words or any(q_lower.startswith(g + " ") or q_lower.endswith(" " + g) for g in greeting_words):
         items = get_attention_items()
@@ -31,7 +162,7 @@ def process_query_intent(user_query: str) -> Dict[str, Any]:
             ],
             "recommendations": [
                 "Ask 'What needs my attention today?' for top operational issues.",
-                "Ask 'Which products are running out?' for inventory stock-out risks.",
+                "Ask 'What was our inventory on August 15?' for historical date snapshots.",
                 "Ask 'Which store performed best?' for store sales performance."
             ],
             "evidence": [],

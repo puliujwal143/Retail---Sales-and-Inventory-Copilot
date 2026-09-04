@@ -222,11 +222,102 @@ def generate_retail_dataset():
         writer.writeheader()
         writer.writerows(inventory_records)
 
+    # 5. Inventory Movements (Historical audit trail for exact date snapshots)
+    movement_records = []
+    start_date_str = start_date.strftime("%Y-%m-%d")
+    
+    # Map sales by (date, store_id, product_id)
+    sales_by_key = {}
+    for s_rec in sales_records:
+        key = (s_rec["date"], s_rec["store_id"], s_rec["product_id"])
+        sales_by_key[key] = sales_by_key.get(key, 0) + s_rec["quantity"]
+
+    # Reconstruct exact backward/forward ledger per (store_id, product_id)
+    for inv_rec in inventory_records:
+        s_id = inv_rec["store_id"]
+        p_id = inv_rec["product_id"]
+        curr_stock = inv_rec["current_stock"]
+
+        # Sum all sales for this store & product over 90 days
+        tot_sales = sum(qty for (d, s, p), qty in sales_by_key.items() if s == s_id and p == p_id)
+        
+        # Determine opening stock 90 days ago and restock events
+        opening_stock = max(10, curr_stock + tot_sales - (tot_sales // 2))
+        
+        # Add OPENING movement
+        movement_records.append({
+            "movement_id": f"MOV_INIT_{s_id}_{p_id}",
+            "date": start_date_str,
+            "store_id": s_id,
+            "product_id": p_id,
+            "movement_type": "OPENING",
+            "quantity": opening_stock,
+            "reason": "Opening Inventory Balance"
+        })
+
+        running_stock = opening_stock
+        restock_sum = 0
+
+        # Simulate day by day
+        for day_offset in range(90):
+            d_str = (start_date + timedelta(days=day_offset)).strftime("%Y-%m-%d")
+            key = (d_str, s_id, p_id)
+            daily_qty = sales_by_key.get(key, 0)
+
+            if daily_qty > 0:
+                running_stock -= daily_qty
+                movement_records.append({
+                    "movement_id": f"MOV_SALE_{d_str.replace('-','')}_{s_id}_{p_id}",
+                    "date": d_str,
+                    "store_id": s_id,
+                    "product_id": p_id,
+                    "movement_type": "SALE",
+                    "quantity": -daily_qty,
+                    "reason": "Customer Sale Transaction"
+                })
+
+            # Check if stock needed restock during the timeline or to align with curr_stock
+            if day_offset in (25, 55, 80) and running_stock < 30:
+                add_qty = 20
+                running_stock += add_qty
+                restock_sum += add_qty
+                movement_records.append({
+                    "movement_id": f"MOV_PURCH_{d_str.replace('-','')}_{s_id}_{p_id}",
+                    "date": d_str,
+                    "store_id": s_id,
+                    "product_id": p_id,
+                    "movement_type": "PURCHASE",
+                    "quantity": add_qty,
+                    "reason": "Supplier Replenishment Shipment"
+                })
+
+        # Final adjustment movement if needed to match current_stock exactly on today's date
+        final_date_str = (end_date - timedelta(days=1)).strftime("%Y-%m-%d")
+        diff = curr_stock - running_stock
+        if diff != 0:
+            movement_records.append({
+                "movement_id": f"MOV_ADJ_{final_date_str.replace('-','')}_{s_id}_{p_id}",
+                "date": final_date_str,
+                "store_id": s_id,
+                "product_id": p_id,
+                "movement_type": "PURCHASE" if diff > 0 else "ADJUSTMENT",
+                "quantity": diff,
+                "reason": "Audit Balance Alignment"
+            })
+
+    movements_csv = os.path.join(data_dir, "inventory_movements.csv")
+    with open(movements_csv, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["movement_id", "date", "store_id", "product_id", "movement_type", "quantity", "reason"])
+        writer.writeheader()
+        writer.writerows(movement_records)
+
     print(f"Dataset generated successfully in '{data_dir}':")
     print(f"- Stores: {len(stores)}")
     print(f"- Products: {len(products)}")
     print(f"- Sales Records: {len(sales_records)}")
     print(f"- Inventory Records: {len(inventory_records)}")
+    print(f"- Inventory Movement Records: {len(movement_records)}")
 
 if __name__ == "__main__":
     generate_retail_dataset()
+

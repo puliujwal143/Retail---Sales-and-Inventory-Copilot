@@ -17,6 +17,8 @@ from src.sales_rules import get_sales_spikes, get_sales_drops, get_category_perf
 from src.recommendation import get_attention_items
 from src.query_engine import process_query_intent
 from src.gemini import generate_copilot_response
+from src.forecasting import calculate_sales_forecast
+from src.sales_rules import compare_stores_analytics
 
 # Initialize FastAPI App
 app = FastAPI(
@@ -37,22 +39,166 @@ def startup_db_init():
 class ChatRequest(BaseModel):
     question: str
     store_id: Optional[str] = "all"
+    target_date: Optional[str] = None
 
 # API ENDPOINTS
 @app.get("/api/dashboard")
-def api_dashboard(store_id: Optional[str] = "all"):
+def api_dashboard(store_id: Optional[str] = "all", date: Optional[str] = None):
     """Returns top-level KPIs, inventory valuation, top products, and store performance."""
     try:
-        summary = get_dashboard_summary()
+        summary = get_dashboard_summary(store_id=store_id, target_date=date)
         return summary
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/snapshot")
+def api_snapshot(date: str, store_id: Optional[str] = "all"):
+    """Returns full historical retail snapshot as of target_date."""
+    try:
+        summary = get_dashboard_summary(store_id=store_id, target_date=date)
+        inv_df = get_inventory_status_df(store_id=store_id, target_date=date)
+        inv_records = inv_df.to_dict(orient="records") if not inv_df.empty else []
+        alerts = get_attention_items()
+        
+        return {
+            "snapshot_date": date,
+            "store_id": store_id,
+            "summary": summary,
+            "inventory": inv_records,
+            "alerts": alerts
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/reorder-plan")
+def api_reorder_plan(store_id: Optional[str] = "all", category: Optional[str] = "all", priority: Optional[str] = "all", date: Optional[str] = None):
+    """Returns dedicated intelligent reorder planner data with target coverage math."""
+    try:
+        df = get_inventory_status_df(store_id=store_id, category=category, target_date=date)
+        if df.empty:
+            return []
+
+        # Filter items requiring reorder or matching priority
+        df["reorder_priority"] = df["status"].apply(lambda s: "CRITICAL" if s in ["CRITICAL", "OUT_OF_STOCK"] else ("HIGH" if s == "WARNING" else "NORMAL"))
+        
+        if priority and priority != "all":
+            df = df[df["reorder_priority"] == priority]
+        
+        # Sort by reorder priority and units needed
+        df = df.sort_values(by=["recommended_reorder", "days_remaining"], ascending=[False, True])
+        return df.to_dict(orient="records")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/forecast")
+def api_forecast(product_id: str, store_id: Optional[str] = "all", date: Optional[str] = None):
+    """Returns 7-day, 14-day, and 30-day deterministic demand forecast with stockout risk flags."""
+    try:
+        return calculate_sales_forecast(product_id=product_id, store_id=store_id, target_date=date)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/compare-stores")
+def api_compare_stores(store_ids: str = "STR001,STR002,STR003", days: int = 30, date: Optional[str] = None):
+    """Returns side-by-side store comparison matrix, stock health, and trend charts."""
+    try:
+        s_list = [s.strip() for s in store_ids.split(",") if s.strip()]
+        return compare_stores_analytics(store_ids=s_list, time_days=days, target_date=date)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/decision-center")
+def api_decision_center(date: Optional[str] = None):
+    """Returns prioritized operational decision items ranked by urgency and impact."""
+    try:
+        df = get_inventory_status_df(target_date=date)
+        if df.empty:
+            return []
+
+        decisions = []
+        # 1. Critical & Out of Stock Reorders
+        crit_df = df[df["status"].isin(["CRITICAL", "OUT_OF_STOCK"])]
+        for _, row in crit_df.iterrows():
+            decisions.append({
+                "priority": "CRITICAL",
+                "category": "Inventory Replenishment",
+                "title": f"Reorder Required: {row['product_name']}",
+                "store_name": row["store_name"],
+                "store_id": row["store_id"],
+                "product_id": row["product_id"],
+                "issue": f"Stock of {row['current_stock']} units covers only {row['days_remaining']} days of demand.",
+                "impact": f"High risk of immediate stock-out and loss of sales.",
+                "action": f"Reorder +{row['recommended_reorder']} units immediately.",
+                "evidence": f"Current Stock: {row['current_stock']} | Avg Daily: {row['average_daily_sales']:.1f}/day | Target: 7 Days"
+            })
+
+        # 2. High Priority Warnings & Sales Drops
+        warn_df = df[df["status"] == "WARNING"]
+        for _, row in warn_df.iterrows():
+            decisions.append({
+                "priority": "HIGH",
+                "category": "Stock Warning",
+                "title": f"Low Stock Warning: {row['product_name']}",
+                "store_name": row["store_name"],
+                "store_id": row["store_id"],
+                "product_id": row["product_id"],
+                "issue": f"Stock covers {row['days_remaining']} days (below 7-day target threshold).",
+                "impact": f"Potential stock depletion within the coming week.",
+                "action": f"Schedule purchase order for +{row['recommended_reorder']} units.",
+                "evidence": f"Stock: {row['current_stock']} | Days Left: {row['days_remaining']}d"
+            })
+
+        # 3. Medium Priority Overstock & Slow Moving
+        over_df = df[df["status"] == "OVERSTOCK"]
+        for _, row in over_df.iterrows():
+            decisions.append({
+                "priority": "MEDIUM",
+                "category": "Capital Optimization",
+                "title": f"Overstock Reduction: {row['product_name']}",
+                "store_name": row["store_name"],
+                "store_id": row["store_id"],
+                "product_id": row["product_id"],
+                "issue": f"High inventory of {row['current_stock']} units covers {row['days_remaining']} days.",
+                "impact": f"Capital lock of ${row['stock_value']} in excess stock.",
+                "action": "Pause upcoming replenishment orders and consider cross-promotions.",
+                "evidence": f"Stock: {row['current_stock']} units (${row['stock_value']}) | Coverage: {row['days_remaining']}d"
+            })
+
+        return decisions
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/executive-report")
+def api_executive_report(store_id: Optional[str] = "all", date: Optional[str] = None):
+    """Returns comprehensive BI Executive Summary Report for export & printing."""
+    try:
+        summary = get_dashboard_summary(store_id=store_id, target_date=date)
+        spikes = get_sales_spikes()
+        drops = get_sales_drops()
+        inv_df = get_inventory_status_df(store_id=store_id, target_date=date)
+        
+        crit_items = inv_df[inv_df["status"].isin(["CRITICAL", "OUT_OF_STOCK"])].to_dict(orient="records") if not inv_df.empty else []
+        reorder_items = inv_df[inv_df["recommended_reorder"] > 0].to_dict(orient="records") if not inv_df.empty else []
+        
+        return {
+            "report_title": "RetailIQ Executive Operations Report",
+            "generated_date": date or "Current Real-Time",
+            "store_scope": store_id,
+            "kpis": summary,
+            "sales_anomalies": {"spikes": spikes, "drops": drops},
+            "critical_stock_items": crit_items,
+            "recommended_reorders": reorder_items,
+            "top_products": summary.get("top_products", []),
+            "store_performance": summary.get("store_performance", [])
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/inventory")
-def api_inventory(store_id: Optional[str] = "all", category: Optional[str] = "all"):
+def api_inventory(store_id: Optional[str] = "all", category: Optional[str] = "all", date: Optional[str] = None):
     """Returns inventory status table with days remaining, status, and reorder math."""
     try:
-        df = get_inventory_status_df(store_id=store_id, category=category)
+        df = get_inventory_status_df(store_id=store_id, category=category, target_date=date)
         if df.empty:
             return []
         return df.to_dict(orient="records")
@@ -85,14 +231,14 @@ def api_analytics_charts(days: int = 30, store_id: Optional[str] = "all", catego
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/products/{product_id}")
-def api_product_detail(product_id: str, store_id: Optional[str] = "all"):
+def api_product_detail(product_id: str, store_id: Optional[str] = "all", date: Optional[str] = None):
     """Returns detailed product metrics, historical sales trend, stock levels, and reorder calculations for modal."""
     try:
         product_info = query_one("SELECT * FROM products WHERE product_id = ?", (product_id,))
         if not product_info:
             raise HTTPException(status_code=404, detail="Product not found")
 
-        df = get_inventory_status_df(store_id=store_id)
+        df = get_inventory_status_df(store_id=store_id, target_date=date)
         prod_inv = df[df["product_id"] == product_id] if not df.empty else None
         
         current_stock = int(prod_inv["current_stock"].sum()) if prod_inv is not None and not prod_inv.empty else 0
@@ -101,7 +247,7 @@ def api_product_detail(product_id: str, store_id: Optional[str] = "all"):
         days_remaining = float(current_stock / avg_daily_sales) if avg_daily_sales > 0 else 999.0
         
         status = "HEALTHY"
-        if current_stock == 0:
+        if current_stock <= 0:
             status = "OUT_OF_STOCK"
         elif days_remaining <= 2.0:
             status = "CRITICAL"
@@ -116,13 +262,32 @@ def api_product_detail(product_id: str, store_id: Optional[str] = "all"):
         reorder_qty = max(0, int(round(target_stock - current_stock)))
 
         # Product daily trend (30 days)
-        trend_query = """
-        SELECT date, COALESCE(SUM(quantity), 0) as units, ROUND(COALESCE(SUM(total_revenue), 0), 2) as revenue
-        FROM sales
-        WHERE product_id = ? AND date >= date((SELECT MAX(date) FROM sales), '-30 days')
-        GROUP BY date ORDER BY date ASC
+        if date:
+            trend_query = """
+            SELECT date, COALESCE(SUM(quantity), 0) as units, ROUND(COALESCE(SUM(total_revenue), 0), 2) as revenue
+            FROM sales
+            WHERE product_id = ? AND date <= ? AND date >= date(?, '-30 days')
+            GROUP BY date ORDER BY date ASC
+            """
+            trend_rows = query_all(trend_query, (product_id, date, date))
+        else:
+            trend_query = """
+            SELECT date, COALESCE(SUM(quantity), 0) as units, ROUND(COALESCE(SUM(total_revenue), 0), 2) as revenue
+            FROM sales
+            WHERE product_id = ? AND date >= date((SELECT MAX(date) FROM sales), '-30 days')
+            GROUP BY date ORDER BY date ASC
+            """
+            trend_rows = query_all(trend_query, (product_id,))
+
+        # Store breakdown for this product
+        store_breakdown_sql = """
+            SELECT st.store_name, COALESCE(SUM(s.quantity), 0) as units_sold, ROUND(COALESCE(SUM(s.total_revenue), 0), 2) as revenue
+            FROM stores st
+            LEFT JOIN sales s ON st.store_id = s.store_id AND s.product_id = ?
+            GROUP BY st.store_id, st.store_name
+            ORDER BY revenue DESC
         """
-        trend_rows = query_all(trend_query, (product_id,))
+        store_matrix = query_all(store_breakdown_sql, (product_id,))
 
         return {
             "product": product_info,
@@ -137,8 +302,9 @@ def api_product_detail(product_id: str, store_id: Optional[str] = "all"):
                 "30d_revenue": round(units_sold_30d * product_info["unit_price"], 2)
             },
             "sales_trend": trend_rows,
+            "store_matrix": store_matrix,
             "evidence": {
-                "source": "inventory + sales SQLite tables",
+                "source": "inventory_movements + sales SQLite tables",
                 "calculation": f"{current_stock} stock / {round(avg_daily_sales, 2)} avg daily sales = {round(days_remaining, 1)} days coverage",
                 "assumptions": [f"{TARGET_COVERAGE_DAYS}-day target inventory coverage", "30-day historical sales window"]
             }
