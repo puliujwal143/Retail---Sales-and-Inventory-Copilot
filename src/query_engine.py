@@ -19,6 +19,7 @@ def process_query_intent(user_query: str, store_id: Optional[str] = "all", targe
     1. Builds structured QuerySpecification (Intent, Entities, Date Range, Store, Product, Category, Limit).
     2. Executes deterministic SQLite calculations via analytics_engine.
     3. Formats evidence, chart specs, and data scope via response_engine.
+    4. Emits detailed QUERY DEBUG trace log.
     """
     # 1. Build Query Specification via Query Planner
     spec = build_query_spec(user_query, override_store=store_id, override_date=target_date)
@@ -28,4 +29,33 @@ def process_query_intent(user_query: str, store_id: Optional[str] = "all", targe
 
     # 3. Format Payload via Response Engine
     payload = format_copilot_payload(spec, analytics_result)
+
+    # 4. QUERY DEBUG LOGGING (Requirement 20)
+    matched_names = [p["product_name"] for p in spec.get("matched_products", [])]
+    excluded_names = [p["product_name"] for p in spec.get("excluded_accessories", [])]
+    store_obj = spec.get("store")
+    store_str = store_obj["store_name"] if store_obj else "All Stores"
+    date_r = spec.get("date_range", {})
+
+    raw_d = analytics_result.get("raw_data", {})
+    confirmed = raw_d.get("confirmed_facts", []) if isinstance(raw_d, dict) else []
+    observed = raw_d.get("observed_patterns", []) if isinstance(raw_d, dict) else []
+    unknowns = raw_d.get("unknowns", []) if isinstance(raw_d, dict) else []
+
+    print("\n" + "="*50)
+    print("QUERY DEBUG")
+    print("="*50)
+    print(f"User: {user_query}")
+    print(f"Intent: {spec.get('intent')}")
+    print(f"Entity: {spec.get('product_family') or (matched_names[0] if matched_names else 'All Products')}")
+    print(f"Matched SKUs: {matched_names}")
+    print(f"Excluded: {excluded_names}")
+    print(f"Date: {date_r.get('start_date')} -> {date_r.get('end_date')} ({date_r.get('time_label')})")
+    print(f"Store: {store_str}")
+    print(f"Summary: {analytics_result.get('context_summary')}")
+    print(f"Confirmed Facts: {confirmed}")
+    print(f"Observed Patterns: {observed}")
+    print(f"Unavailable Evidence: {unknowns}")
+    print("="*50 + "\n")
+
     return payload

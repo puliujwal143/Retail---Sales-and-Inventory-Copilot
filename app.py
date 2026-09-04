@@ -352,6 +352,27 @@ def api_products():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+from src.query_planner import build_query_spec, CONVERSATION_MEMORY
+from src.analytics_engine import execute_query_spec
+from src.response_engine import format_copilot_payload
+
+@app.get("/api/debug/query")
+def api_debug_query(question: str, store_id: Optional[str] = "all", target_date: Optional[str] = None):
+    """Development debug endpoint for inspecting canonical QueryContext, SQL results, and chart specs."""
+    try:
+        CONVERSATION_MEMORY.clear()
+        spec = build_query_spec(question, override_store=store_id, override_date=target_date)
+        analytics_res = execute_query_spec(spec)
+        payload = format_copilot_payload(spec, analytics_res)
+        return {
+            "query": question,
+            "query_context": spec,
+            "analytics_result": analytics_res,
+            "final_payload": payload
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/chat")
 def api_chat(req: ChatRequest):
     """

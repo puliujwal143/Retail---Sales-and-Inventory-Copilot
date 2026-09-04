@@ -38,20 +38,17 @@ def validate_and_enrich_payload(query_spec: Dict[str, Any], analytics_result: Di
         return response_payload
 
     # 2. CAUSAL / WHY QUERY COMPLIANCE
-    requires_cause = query_spec.get("requires_cause_analysis", False) or intent == "WHY_SALES_CHANGED"
+    requires_cause = query_spec.get("requires_cause_analysis", False) or intent in ["WHY_SALES_CHANGED", "CAUSAL_ANALYSIS"]
     if requires_cause:
-        response_payload["data_sufficiency"] = "insufficient"
-        current_answer = response_payload.get("answer", "")
-        if "CAUSE UNVERIFIED" not in current_answer and "insufficient" in current_answer.lower():
-            response_payload["answer"] = (
-                f"CAUSE UNVERIFIED IN DATASET: {analytics_result.get('context_summary', '')} "
-                f"Note: Observed trends are facts, but specific root causes (marketing, ads, pricing, competitor moves) cannot be verified because those datasets are absent."
-            )
+        context_sum = analytics_result.get("context_summary", "")
+        if context_sum:
+            response_payload["answer"] = context_sum
+            response_payload["context_summary"] = context_sum
 
     # 3. CHART & EVIDENCE SYNCHRONIZATION
     chart_spec = response_payload.get("chart")
     evidence = response_payload.get("evidence", [])
-    if chart_spec and not chart_spec.get("labels"):
+    if chart_spec and (not chart_spec.get("labels") or not chart_spec.get("datasets")):
         logger.warning("Empty chart detected during validation. Collapsing chart container.")
         response_payload["chart"] = None
 

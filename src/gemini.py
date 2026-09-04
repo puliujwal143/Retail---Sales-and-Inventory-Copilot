@@ -104,7 +104,7 @@ Remember: Respond ONLY with valid JSON following the schema. Directly answer the
         client = genai.Client(api_key=api_key)
         
         # Try primary flash model, with fallbacks for lite model
-        model_names = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-3.5-flash-lite']
+        model_names = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash']
         raw_text = None
         last_err = None
 

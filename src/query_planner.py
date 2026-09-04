@@ -9,6 +9,7 @@ import datetime
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 from src.database import query_all, query_one
+from src.query_context import QueryContext
 
 logger = logging.getLogger("retailiq.planner")
 
@@ -357,9 +358,20 @@ def classify_intent(text: str, entities: Dict[str, Any], date_info: Dict[str, An
     """Classifies user query into canonical retail query intent."""
     q = text.lower()
 
-    # 1. Why / Causal Query
-    if any(k in q for k in ["why did", "why has", "why is", "reason for", "cause of", "what caused"]):
-        return "WHY_SALES_CHANGED"
+    # 0. Sales Improvement / Optimization / Opportunities Intent
+    if any(k in q for k in [
+        "improve sales", "improve the sales", "increase sales", "increase revenue", "improve revenue",
+        "what can i do", "what should i do", "what should i focus", "where should i focus",
+        "how to sell more", "sell more", "sales opportunities", "biggest opportunities", "biggest sales",
+        "hurting sales", "losing sales", "products are declining", "declining products",
+        "stores are underperforming", "underperforming stores", "focus on today", "what to do today",
+        "recommendations to improve", "how can we increase", "how can i improve", "improve performance"
+    ]):
+        return "SALES_IMPROVEMENT"
+
+    # 1. Why / Causal Query / Driver Analysis
+    if any(k in q for k in ["why did", "why has", "why is", "reason for", "cause of", "what caused", "what is driving", "driving sales", "driving revenue", "why are", "what explains"]):
+        return "CAUSAL_ANALYSIS"
 
     # 2. Seasonality
     if any(k in q for k in ["seasonality", "seasonal", "monthly pattern", "best month", "demand pattern"]):
@@ -390,21 +402,24 @@ def classify_intent(text: str, entities: Dict[str, Any], date_info: Dict[str, An
         return "TOP_CATEGORIES"
 
     # 6. Store Performance
-    if any(k in q for k in ["top store", "best store", "store performance", "which store", "which location", "sales by store", "by store"]):
-        return "STORE_PERFORMANCE"
+    if any(k in q for k in ["top store", "best store", "store performance", "which store", "which location", "sales by store", "by store", "sells the most"]):
+        if not entities.get("matched_products") and not entities.get("product_family") and not ("laptop" in q or "product" in q or "sku" in q):
+            return "STORE_PERFORMANCE"
 
     # 7. Product Rankings & Sales Performance
     if any(k in q for k in [
         "top product", "best product", "best performer", "top performer", "best seller", "best-selling",
         "highest revenue product", "most sold product", "top skus", "worst performer", "worst product",
         "top 5 products", "top 10 products", "best sku", "performing product", "performing item",
-        "made the most revenue", "sells the most", "sku is performing"
+        "made the most revenue", "sells the most", "sku is performing", "best performing item", "best performing product"
     ]) or (any(w in q for w in ["product", "sku", "item"]) and any(w in q for w in ["best", "most", "top", "performing", "lead", "highest", "revenue", "units"])):
         return "TOP_PRODUCTS"
 
     if entities.get("product_family") or entities.get("product") or entities.get("matched_products"):
         if any(k in q for k in ["best", "top", "lead", "highest", "winner"]):
             return "TOP_PRODUCTS"
+        if any(k in q for k in ["store", "stores", "which store"]):
+            return "STORE_PERFORMANCE"
         return "PRODUCT_PERFORMANCE"
 
     # 8. Sales Trend
@@ -419,7 +434,7 @@ def classify_intent(text: str, entities: Dict[str, Any], date_info: Dict[str, An
 
 def build_query_spec(question: str, override_store: Optional[str] = None, override_date: Optional[str] = None) -> Dict[str, Any]:
     """
-    Main Entrypoint: Builds validated QuerySpecification dictionary.
+    Main Entrypoint: Builds validated QuerySpecification dictionary using QueryContext.
     Includes Entity Resolution, Product Family Identification, and Diagnostic Logging.
     """
     global CONVERSATION_MEMORY
@@ -429,15 +444,19 @@ def build_query_spec(question: str, override_store: Optional[str] = None, overri
     entities = extract_entities(q_clean)
 
     # Store selector override from UI header
-    if not entities["store"] and override_store and override_store.upper() != "ALL":
+    if override_store and override_store.upper() != "ALL":
         stores, _, _ = get_database_entities()
         for st in stores:
             if st["store_id"].lower() == override_store.lower():
                 entities["store"] = st
                 break
+    elif override_store and override_store.upper() == "ALL" and not any(w in q_clean.lower() for w in ["store", "location", "downtown", "westside", "metro", "central", "suburban"]):
+        entities["store"] = None
 
-    # Follow-up Memory Context Preservation
-    if len(q_clean.split()) <= 4 and CONVERSATION_MEMORY.get("last_intent"):
+    # Follow-up Memory Context Preservation (only if brief follow-up without explicit intent)
+    raw_intent = classify_intent(q_clean, entities, date_info)
+    is_short_followup = (len(q_clean.split()) <= 4 or any(k in q_clean.lower() for k in ["what about", "which store", "how about", "store contribution"])) and raw_intent == "SALES_SUMMARY"
+    if is_short_followup and CONVERSATION_MEMORY.get("last_intent"):
         if not entities["matched_products"] and CONVERSATION_MEMORY.get("last_matched_products"):
             entities["matched_products"] = CONVERSATION_MEMORY["last_matched_products"]
             entities["product_family"] = CONVERSATION_MEMORY.get("last_product_family")
@@ -448,9 +467,9 @@ def build_query_spec(question: str, override_store: Optional[str] = None, overri
             entities["category"] = CONVERSATION_MEMORY["last_category"]
 
     intent = classify_intent(q_clean, entities, date_info)
-
-    # Diagnostic Development Logging
-    logger.info(f"[ENTITY RESOLUTION] Query: '{q_clean}' | Intent: {intent} | Entity Type: {entities['entity_type']} | Family: {entities['product_family']} | Matched SKUs: {[p['product_name'] for p in entities['matched_products']]} | Excluded: {[p['product_name'] for p in entities['excluded_accessories']]}")
+    requires_cause = intent == "CAUSAL_ANALYSIS" or any(k in q_clean.lower() for k in ["why", "reason", "cause", "what caused", "what is driving", "what explains"])
+    if requires_cause:
+        intent = "CAUSAL_ANALYSIS"
 
     # Memory state update
     CONVERSATION_MEMORY["last_intent"] = intent
@@ -464,22 +483,34 @@ def build_query_spec(question: str, override_store: Optional[str] = None, overri
     if entities["product"]: CONVERSATION_MEMORY["last_product"] = entities["product"]
     if entities["category"]: CONVERSATION_MEMORY["last_category"] = entities["category"]
 
-    requires_cause = any(k in q_clean.lower() for k in ["why", "reason", "cause", "what caused", "what is driving", "what explains"])
+    store_id = entities["store"]["store_id"] if entities.get("store") else "all"
+    store_name = entities["store"]["store_name"] if entities.get("store") else "All Stores"
 
-    return {
-        "raw_question": q_clean,
-        "intent": intent,
-        "metric": entities["metric"],
-        "entity_type": entities["entity_type"],
-        "date_range": date_info,
-        "store": entities["store"],
-        "product": entities["product"],
-        "product_family": entities["product_family"],
-        "matched_products": entities["matched_products"],
-        "excluded_accessories": entities["excluded_accessories"],
-        "category": entities["category"],
-        "limit": entities["limit"],
-        "threshold_days": entities["threshold_days"],
-        "requires_cause_analysis": requires_cause,
-        "chart_required": True
-    }
+    # Construct canonical QueryContext
+    ctx = QueryContext(
+        raw_question=q_clean,
+        intent=intent,
+        metric=entities["metric"],
+        entity_type=entities["entity_type"],
+        matched_products=entities["matched_products"],
+        excluded_accessories=entities["excluded_accessories"],
+        product_family=entities["product_family"],
+        product=entities["product"],
+        category=entities["category"],
+        store_id=store_id,
+        store_name=store_name,
+        start_date=date_info.get("start_date", "2016-01-01"),
+        end_date=date_info.get("end_date", "2026-09-03"),
+        comparison_label=date_info.get("time_label"),
+        limit=entities["limit"],
+        requires_cause_analysis=requires_cause,
+        chart_required=True
+    )
+
+    spec = ctx.to_dict()
+    spec["raw_date_info"] = date_info
+    spec["store"] = entities["store"]
+
+    logger.info(f"[QUERY CONTEXT] Query: '{q_clean}' | Intent: {intent} | Store: {store_name} | Scope: {date_info.get('time_label')} | Entity: {entities['product_family'] or 'All'}")
+
+    return spec

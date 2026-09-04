@@ -7,10 +7,10 @@ from typing import Dict, Any, List
 
 def build_structured_evidence(analytics_result: Dict[str, Any], query_spec: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Structures analytics findings into facts, observations, hypotheses, and unknowns.
+    Structures analytics findings into FACTS, OBSERVATIONS, HYPOTHESES (POSSIBLE DRIVERS), and UNKNOWNS.
     """
     intent = analytics_result.get("intent", query_spec.get("intent", "SALES_SUMMARY"))
-    requires_cause = query_spec.get("requires_cause_analysis", False) or intent == "WHY_SALES_CHANGED"
+    requires_cause = query_spec.get("requires_cause_analysis", False) or intent in ["WHY_SALES_CHANGED", "CAUSAL_ANALYSIS"]
     metrics = analytics_result.get("metrics", [])
     raw_data = analytics_result.get("raw_data", [])
     raw_evidence = analytics_result.get("evidence", [])
@@ -19,6 +19,19 @@ def build_structured_evidence(analytics_result: Dict[str, Any], query_spec: Dict
     observations = []
     hypotheses = []
     unknowns = []
+
+    # Check if raw_data is a dict containing structured taxonomy from run_driver_analysis
+    if isinstance(raw_data, dict) and "confirmed_facts" in raw_data:
+        facts = raw_data.get("confirmed_facts", [])
+        observations = raw_data.get("observed_patterns", [])
+        hypotheses = raw_data.get("possible_drivers", [])
+        unknowns = raw_data.get("unknowns", [])
+        return {
+            "facts": facts,
+            "observations": observations,
+            "hypotheses": hypotheses,
+            "unknowns": unknowns
+        }
 
     # 1. FACTS (Calculated numbers directly from SQLite)
     for m in metrics:
@@ -43,9 +56,9 @@ def build_structured_evidence(analytics_result: Dict[str, Any], query_spec: Dict
 
     # 3. HYPOTHESES & UNKNOWNS (Triggered for Causal / Why Queries)
     if requires_cause:
-        hypotheses.append("Potential unconfirmed drivers may include promotional campaigns, pricing adjustments, or external market demand.")
-        unknowns.append("The database contains transaction sales history and stock levels, but does NOT contain marketing, advertisement, price-change, or competitor datasets.")
-        unknowns.append("Root cause cannot be established without inventing unverified facts.")
+        hypotheses.append("Potential co-occurring drivers may include stock availability, velocity shifts, or store demand changes.")
+        unknowns.append("The database contains transaction sales history and stock levels, but does NOT contain marketing campaigns, advertisements, pricing changes, or competitor datasets.")
+        unknowns.append("External root causes cannot be established without inventing unverified facts.")
 
     return {
         "facts": facts,

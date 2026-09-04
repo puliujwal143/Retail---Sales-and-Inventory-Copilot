@@ -1310,24 +1310,25 @@ document.addEventListener("DOMContentLoaded", () => {
             });
 
             const data = await res.json();
-            if (loadingCard) loadingCard.classList.add("hidden");
             renderCopilotResponse(assistantMsgDiv, data);
 
         } catch (err) {
-            if (loadingCard) loadingCard.classList.add("hidden");
             assistantMsgDiv.querySelector(".message-body").innerHTML = `
                 <div style="color: var(--status-critical);">Error executing AI query. Please check server logs.</div>
             `;
+        } finally {
+            if (loadingCard) loadingCard.classList.add("hidden");
         }
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
     // Render Grounded BI Executive Response in Chat
     function renderCopilotResponse(msgElement, data) {
-        const isSufficient = data.data_sufficiency === "sufficient";
-        const sufficiencyBadge = isSufficient ?
+        const sufficiencyBadge = data.data_sufficiency === "sufficient" ?
             `<span class="badge badge-success">✔ Data Grounded & Sufficient</span>` :
-            `<span class="badge badge-warning">⚠️ Data Insufficient - Cause Unverified</span>`;
+            (data.data_sufficiency === "partial" ?
+                `<span class="badge badge-warning">⚠️ Data Partially Available — External Cause Unverified</span>` :
+                `<span class="badge badge-critical">❌ Data Insufficient</span>`);
 
         let scopeHTML = "";
         if (data.data_scope) {
