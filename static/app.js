@@ -1111,11 +1111,11 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
     }
 
-    // SVG Chart Render Engine (Supports multi-dataset store comparison curves)
+    // SVG Chart Render Engine (Supports multi-dataset, line, bar, horizontal_bar, donut)
     function renderSVGChart(containerId, chartSpec) {
         const container = document.getElementById(containerId);
         if (!container || !chartSpec || !chartSpec.labels || chartSpec.labels.length === 0) {
-            if (container) container.innerHTML = '<div style="color:var(--text-muted); font-size:12px; padding:20px;">No chart data available.</div>';
+            if (container) container.innerHTML = '<div style="color:var(--text-muted); font-size:12px; padding:20px; text-align:center;">No chart data available for this query.</div>';
             return;
         }
 
@@ -1125,19 +1125,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const type = chartSpec.type || "line";
         const labels = chartSpec.labels;
-        const datasets = chartSpec.datasets || [chartSpec.datasets[0]];
+        const datasets = chartSpec.datasets && chartSpec.datasets.length > 0 ? chartSpec.datasets : [{ label: "Data", data: [], color: "#087F80" }];
 
         if (type === "line" || type === "area") {
             let maxVal = 10;
             datasets.forEach(ds => {
-                const m = Math.max(...ds.data.filter(v => v !== null && v !== undefined));
+                const m = Math.max(...ds.data.filter(v => v !== null && v !== undefined && !isNaN(v)));
                 if (m > maxVal) maxVal = m;
             });
 
             const polylinesHTML = datasets.map(ds => {
                 const color = ds.color || "#087F80";
                 const points = ds.data.map((v, i) => {
-                    if (v === null || v === undefined) return null;
+                    if (v === null || v === undefined || isNaN(v)) return null;
                     const x = padding + (i / Math.max(1, labels.length - 1)) * (width - 2 * padding);
                     const y = height - padding - (v / maxVal) * (height - 2 * padding);
                     return `${x},${y}`;
@@ -1152,25 +1152,112 @@ document.addEventListener("DOMContentLoaded", () => {
                     <line x1="${padding}" y1="${padding}" x2="${width - padding}" y2="${padding}" stroke="#E5EAF0" stroke-dasharray="4" stroke-width="1" />
                     ${polylinesHTML}
                     <text x="${padding}" y="${padding - 8}" fill="#64748B" font-size="10" font-weight="600">$${Math.round(maxVal).toLocaleString()}</text>
-                    <text x="${padding}" y="${height - 6}" fill="#64748B" font-size="10">${labels[0]}</text>
-                    <text x="${width - padding - 45}" y="${height - 6}" fill="#64748B" font-size="10">${labels[labels.length - 1]}</text>
+                    <text x="${padding}" y="${height - 6}" fill="#64748B" font-size="10">${labels[0] || ''}</text>
+                    <text x="${width - padding - 45}" y="${height - 6}" fill="#64748B" font-size="10">${labels[labels.length - 1] || ''}</text>
                 </svg>
             `;
             container.innerHTML = svgHTML;
 
-        } else if (type === "bar") {
+        } else if (type === "horizontal_bar") {
             const dataVals = datasets[0].data;
-            const maxVal = Math.max(...dataVals) || 100;
-            const barWidth = (width - 2 * padding) / dataVals.length;
+            const maxVal = Math.max(...dataVals.filter(v => typeof v === 'number' && !isNaN(v))) || 100;
+            const barHeight = (height - 2 * padding) / Math.max(1, dataVals.length);
 
             const barsHTML = dataVals.map((v, i) => {
-                const barHeight = (v / maxVal) * (height - 2 * padding);
+                const valNum = typeof v === 'number' ? v : 0;
+                const barW = Math.max(2, (valNum / maxVal) * (width - 2 * padding - 120));
+                const y = padding + i * barHeight + barHeight * 0.15;
+                const h = Math.max(4, barHeight * 0.7);
+                const color = datasets[0].color || '#f59e0b';
+                const lbl = labels[i] ? String(labels[i]).substring(0, 16) : '';
+                const valStr = valNum >= 1000 ? '$' + Math.round(valNum).toLocaleString() : valNum;
+                return `
+                    <text x="${padding}" y="${y + h/2 + 3}" fill="#64748B" font-size="9" font-weight="600" text-anchor="start">${lbl}</text>
+                    <rect x="${padding + 110}" y="${y}" width="${barW}" height="${h}" fill="${color}" rx="3" />
+                    <text x="${padding + 115 + barW}" y="${y + h/2 + 3}" fill="#1E293B" font-size="9" font-weight="600" text-anchor="start">${valStr}</text>
+                `;
+            }).join("");
+
+            container.innerHTML = `
+                <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%;">
+                    ${barsHTML}
+                </svg>
+            `;
+
+        } else if (type === "donut" || type === "pie") {
+            const dataVals = datasets[0].data.map(v => (typeof v === 'number' && !isNaN(v)) ? v : 0);
+            const total = dataVals.reduce((a, b) => a + b, 0) || 1;
+            const palette = ["#087F80", "#2B6CB0", "#D69E2E", "#E53E3E", "#805AD5", "#319795", "#DD6B20"];
+
+            let cumulativeAngle = 0;
+            const cx = 100;
+            const cy = height / 2;
+            const r = Math.min(cx, cy) - 15;
+            const innerR = type === "donut" ? r * 0.55 : 0;
+
+            const slicesHTML = dataVals.map((v, i) => {
+                const sliceAngle = (v / total) * 2 * Math.PI;
+                const startAngle = cumulativeAngle;
+                const endAngle = cumulativeAngle + sliceAngle;
+                cumulativeAngle += sliceAngle;
+
+                const x1 = cx + r * Math.cos(startAngle);
+                const y1 = cy + r * Math.sin(startAngle);
+                const x2 = cx + r * Math.cos(endAngle);
+                const y2 = cy + r * Math.sin(endAngle);
+
+                const x1_in = cx + innerR * Math.cos(startAngle);
+                const y1_in = cy + innerR * Math.sin(startAngle);
+                const x2_in = cx + innerR * Math.cos(endAngle);
+                const y2_in = cy + innerR * Math.sin(endAngle);
+
+                const largeArc = sliceAngle > Math.PI ? 1 : 0;
+                const color = palette[i % palette.length];
+
+                let path = "";
+                if (innerR > 0) {
+                    path = `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} L ${x2_in} ${y2_in} A ${innerR} ${innerR} 0 ${largeArc} 0 ${x1_in} ${y1_in} Z`;
+                } else {
+                    path = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+                }
+
+                return `<path d="${path}" fill="${color}" stroke="#FFFFFF" stroke-width="1.5" />`;
+            }).join("");
+
+            const legendHTML = labels.map((lbl, i) => {
+                const color = palette[i % palette.length];
+                const val = dataVals[i];
+                const ly = 25 + i * 20;
+                if (ly > height - 10) return '';
+                const valStr = val >= 1000 ? '$' + Math.round(val).toLocaleString() : val;
+                return `
+                    <rect x="220" y="${ly}" width="10" height="10" fill="${color}" rx="2" />
+                    <text x="236" y="${ly + 9}" fill="#475569" font-size="10">${lbl ? String(lbl).substring(0, 20) : ''}: ${valStr}</text>
+                `;
+            }).join("");
+
+            container.innerHTML = `
+                <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%;">
+                    ${slicesHTML}
+                    ${legendHTML}
+                </svg>
+            `;
+
+        } else {
+            // Default Bar Chart
+            const dataVals = datasets[0].data;
+            const maxVal = Math.max(...dataVals.filter(v => typeof v === 'number' && !isNaN(v))) || 100;
+            const barWidth = (width - 2 * padding) / Math.max(1, dataVals.length);
+
+            const barsHTML = dataVals.map((v, i) => {
+                const valNum = typeof v === 'number' ? v : 0;
+                const barHeight = (valNum / maxVal) * (height - 2 * padding);
                 const x = padding + i * barWidth + barWidth * 0.15;
                 const y = height - padding - barHeight;
-                const w = barWidth * 0.7;
+                const w = Math.max(2, barWidth * 0.7);
                 return `
                     <rect x="${x}" y="${y}" width="${w}" height="${barHeight}" fill="${datasets[0].color || '#087F80'}" rx="3" />
-                    <text x="${x + w/2}" y="${height - 6}" fill="#64748B" font-size="9" text-anchor="middle">${labels[i] ? labels[i].substring(0, 8) : ''}</text>
+                    <text x="${x + w/2}" y="${height - 6}" fill="#64748B" font-size="9" text-anchor="middle">${labels[i] ? String(labels[i]).substring(0, 8) : ''}</text>
                 `;
             }).join("");
 
@@ -1242,6 +1329,11 @@ document.addEventListener("DOMContentLoaded", () => {
             `<span class="badge badge-success">✔ Data Grounded & Sufficient</span>` :
             `<span class="badge badge-warning">⚠️ Data Insufficient - Cause Unverified</span>`;
 
+        let scopeHTML = "";
+        if (data.data_scope) {
+            scopeHTML = `<div style="font-size:11px; font-weight:700; color:var(--brand-teal); background:#ECFDF5; border:1px solid #A7F3D0; padding:4px 8px; border-radius:4px; margin-bottom:8px; display:inline-block;">📊 ${data.data_scope}</div>`;
+        }
+
         let metricsHTML = "";
         if (data.key_metrics && data.key_metrics.length > 0) {
             metricsHTML = `
@@ -1272,7 +1364,7 @@ document.addEventListener("DOMContentLoaded", () => {
         let chartHTML = data.chart ? `
             <div style="background:#FFFFFF; border:1px solid var(--border-color); padding:14px; border-radius:8px; margin:12px 0;">
                 <div style="font-size:12px; font-weight:700; color:var(--text-primary); margin-bottom:8px;">${data.chart.title}</div>
-                <div id="${chartContainerId}" class="svg-chart-container" style="height:160px;"></div>
+                <div id="${chartContainerId}" class="svg-chart-container" style="height:180px;"></div>
             </div>
         ` : "";
 
@@ -1282,22 +1374,30 @@ document.addEventListener("DOMContentLoaded", () => {
                 <details style="margin-top:10px; font-size:11px; color:var(--text-muted);">
                     <summary style="cursor:pointer; font-weight:600; color:var(--text-secondary);">🔍 Supporting Evidence (${data.evidence.length} items)</summary>
                     <div style="margin-top:8px; display:flex; flex-direction:column; gap:4px;">
-                        ${data.evidence.map(e => `
-                            <div style="background:#FFFFFF; border:1px solid var(--border-color); padding:6px 10px; border-radius:4px; display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:4px;">
-                                <div><strong>Product:</strong> ${e.product_name}</div>
-                                <div><strong>Store:</strong> ${e.store_name}</div>
-                                <div><strong>Stock:</strong> ${e.current_stock}</div>
-                                <div><strong>Avg Daily:</strong> ${e.avg_daily_sales}</div>
-                                <div><strong>Days Remaining:</strong> ${e.days_remaining}</div>
-                            </div>
-                        `).join("")}
+                        ${data.evidence.map(e => {
+                            if (typeof e === 'string') return `<div style="background:#FFFFFF; border:1px solid var(--border-color); padding:4px 8px; border-radius:4px;">${e}</div>`;
+                            return `
+                            <div style="background:#FFFFFF; border:1px solid var(--border-color); padding:6px 10px; border-radius:4px; display:flex; flex-wrap:wrap; gap:8px;">
+                                ${e.year ? `<div><strong>Year:</strong> ${e.year}</div>` : ''}
+                                ${e.product_name ? `<div><strong>Product:</strong> ${e.product_name}</div>` : ''}
+                                ${e.store_name ? `<div><strong>Store:</strong> ${e.store_name}</div>` : ''}
+                                ${e.revenue !== undefined ? `<div><strong>Revenue:</strong> ${typeof e.revenue === 'number' ? '$' + Math.round(e.revenue).toLocaleString() : e.revenue}</div>` : ''}
+                                ${e.units_sold !== undefined ? `<div><strong>Units:</strong> ${typeof e.units_sold === 'number' ? e.units_sold.toLocaleString() : e.units_sold}</div>` : ''}
+                                ${e.current_stock !== undefined && e.current_stock !== "N/A" ? `<div><strong>Stock:</strong> ${e.current_stock}</div>` : ''}
+                                ${e.avg_daily_sales !== undefined && e.avg_daily_sales !== 0 ? `<div><strong>Avg Daily:</strong> ${e.avg_daily_sales}</div>` : ''}
+                                ${e.source ? `<div><strong>Source:</strong> ${e.source}</div>` : ''}
+                            </div>`;
+                        }).join("")}
                     </div>
                 </details>
             `;
         }
 
         msgElement.querySelector(".message-body").innerHTML = `
-            <div style="margin-bottom:6px;">${sufficiencyBadge}</div>
+            <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:6px;">
+                <div>${sufficiencyBadge}</div>
+                ${scopeHTML}
+            </div>
             <div style="font-size: 13px; line-height: 1.55; color: var(--text-primary);">
                 ${data.answer}
             </div>
@@ -1310,7 +1410,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (data.chart) {
             setTimeout(() => {
                 renderSVGChart(chartContainerId, data.chart);
-            }, 50);
+            }, 60);
         }
     }
 });

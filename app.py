@@ -365,7 +365,7 @@ def api_chat(req: ChatRequest):
             raise HTTPException(status_code=400, detail="Question cannot be empty.")
         
         # 1. Deterministic query processing & evidence gathering
-        processed = process_query_intent(req.question.strip())
+        processed = process_query_intent(req.question.strip(), store_id=req.store_id, target_date=req.target_date)
         
         # 2. Gemini explanation generation
         grounded_response = generate_copilot_response(processed)

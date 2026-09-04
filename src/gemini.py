@@ -61,6 +61,7 @@ def generate_copilot_response(processed_query: Dict[str, Any]) -> Dict[str, Any]
     # Prepare prompt context
     user_query = processed_query.get("user_query", "")
     intent = processed_query.get("intent", "")
+    data_scope = processed_query.get("data_scope", "")
     data_sufficiency = processed_query.get("data_sufficiency", "sufficient")
     context_summary = processed_query.get("context_summary", "")
     evidence = processed_query.get("evidence", [])
@@ -72,6 +73,7 @@ def generate_copilot_response(processed_query: Dict[str, Any]) -> Dict[str, Any]
     prompt_content = f"""USER QUESTION: "{user_query}"
 
 CLASSIFIED INTENT: {intent}
+DATA SCOPE: {data_scope}
 SYSTEM DATA SUFFICIENCY: {data_sufficiency}
 ANALYTICS SUMMARY: {context_summary}
 
@@ -127,6 +129,7 @@ Remember: Respond ONLY with valid JSON following the schema. Ground every statem
             parsed_json.setdefault("data_sufficiency", data_sufficiency)
             parsed_json.setdefault("assumptions", assumptions)
             parsed_json.setdefault("evidence", evidence)
+            parsed_json["data_scope"] = data_scope
             parsed_json["chart"] = chart
             return parsed_json
         else:
@@ -160,6 +163,7 @@ def create_deterministic_fallback(processed_query: Dict[str, Any], note: str = "
     """
     user_query = processed_query.get("user_query", "")
     intent = processed_query.get("intent", "")
+    data_scope = processed_query.get("data_scope", "")
     data_sufficiency = processed_query.get("data_sufficiency", "sufficient")
     context_summary = processed_query.get("context_summary", "")
     evidence = processed_query.get("evidence", [])
@@ -171,7 +175,7 @@ def create_deterministic_fallback(processed_query: Dict[str, Any], note: str = "
     if data_sufficiency == "insufficient":
         answer = (
             f"Regarding '{user_query}': {context_summary} "
-            f"The current dataset contains sales transaction history and inventory stock levels, but does NOT contain "
+            f"The dataset contains sales transaction history and inventory stock levels, but does NOT contain "
             f"marketing campaigns, advertisements, price changes, or competitor data. Therefore, the specific root cause cannot be determined without inventing unverified facts."
         )
     else:
@@ -184,6 +188,7 @@ def create_deterministic_fallback(processed_query: Dict[str, Any], note: str = "
 
     return {
         "answer": answer,
+        "data_scope": data_scope,
         "key_metrics": metrics,
         "recommendations": recommendations,
         "evidence": evidence,
