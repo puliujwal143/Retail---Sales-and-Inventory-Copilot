@@ -56,7 +56,7 @@ def generate_copilot_response(processed_query: Dict[str, Any]) -> Dict[str, Any]
     # If API key missing, immediately return deterministic fallback
     if not api_key:
         logger.info("GEMINI_API_KEY not found in environment. Using deterministic fallback engine.")
-        return create_deterministic_fallback(processed_query, "Gemini API key is not configured. (Operating in Offline Deterministic Mode)")
+        return create_deterministic_fallback(processed_query, "Operating in Offline Deterministic Mode")
 
     # Prepare prompt context
     user_query = processed_query.get("user_query", "")
@@ -67,6 +67,7 @@ def generate_copilot_response(processed_query: Dict[str, Any]) -> Dict[str, Any]
     assumptions = processed_query.get("assumptions", [])
     metrics = processed_query.get("metrics", [])
     recommendations = processed_query.get("recommendations", [])
+    chart = processed_query.get("chart", None)
 
     prompt_content = f"""USER QUESTION: "{user_query}"
 
@@ -123,10 +124,10 @@ Remember: Respond ONLY with valid JSON following the schema. Ground every statem
         # Parse JSON output
         parsed_json = clean_and_parse_json(raw_text)
         if parsed_json:
-            # Ensure required keys exist
             parsed_json.setdefault("data_sufficiency", data_sufficiency)
             parsed_json.setdefault("assumptions", assumptions)
             parsed_json.setdefault("evidence", evidence)
+            parsed_json["chart"] = chart
             return parsed_json
         else:
             logger.warning("Gemini returned non-JSON string. Falling back to deterministic output.")
@@ -134,7 +135,7 @@ Remember: Respond ONLY with valid JSON following the schema. Ground every statem
 
     except Exception as e:
         logger.error(f"Gemini API request failed: {e}")
-        return create_deterministic_fallback(processed_query, f"Gemini API error ({str(e)})")
+        return create_deterministic_fallback(processed_query, f"Gemini fallback mode ({str(e)})")
 
 def clean_and_parse_json(text: str) -> Dict[str, Any]:
     """Cleans markdown code blocks and parses JSON safely."""
@@ -165,6 +166,7 @@ def create_deterministic_fallback(processed_query: Dict[str, Any], note: str = "
     assumptions = processed_query.get("assumptions", [])
     metrics = processed_query.get("metrics", [])
     recommendations = processed_query.get("recommendations", [])
+    chart = processed_query.get("chart", None)
 
     if data_sufficiency == "insufficient":
         answer = (
@@ -186,5 +188,6 @@ def create_deterministic_fallback(processed_query: Dict[str, Any], note: str = "
         "recommendations": recommendations,
         "evidence": evidence,
         "assumptions": assumptions,
-        "data_sufficiency": data_sufficiency
+        "data_sufficiency": data_sufficiency,
+        "chart": chart
     }
