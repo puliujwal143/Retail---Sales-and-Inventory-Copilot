@@ -1,6 +1,7 @@
 """
 Deterministic Analytics Engine for RetailIQ.
 Executes parameterized SQLite queries based on structured QuerySpecifications.
+Ensures charts, evidence, KPIs, and textual answers are generated from the EXACT SAME dataset.
 """
 
 from typing import Dict, Any, List
@@ -13,6 +14,7 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
     Primary dispatcher: Executes SQL calculations for any QuerySpecification.
     """
     intent = spec.get("intent", "SALES_SUMMARY")
+    entity_type = spec.get("entity_type", "ALL_PRODUCTS")
     date_range = spec.get("date_range", {})
     start_date = date_range.get("start_date", "2016-01-01")
     end_date = date_range.get("end_date", "2026-09-03")
@@ -22,18 +24,119 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
     store_id = store_filter["store_id"] if store_filter else None
     store_name = store_filter["store_name"] if store_filter else "All Stores"
 
-    prod_filter = spec.get("product")
-    prod_id = prod_filter["product_id"] if prod_filter else None
-    prod_name = prod_filter["product_name"] if prod_filter else None
-
+    matched_products = spec.get("matched_products", [])
+    excluded_accessories = spec.get("excluded_accessories", [])
+    product_family = spec.get("product_family", None)
     cat_filter = spec.get("category")
     limit = spec.get("limit", 5)
 
     data_scope_str = f"Date Scope: {time_label} ({start_date} to {end_date}) • Scope: {store_name}"
-    if cat_filter: data_scope_str += f" • Category: {cat_filter}"
-    if prod_name: data_scope_str += f" • Product: {prod_name}"
+    if product_family: data_scope_str += f" • Entity: {product_family}"
+    elif cat_filter: data_scope_str += f" • Category: {cat_filter}"
+    elif matched_products: data_scope_str += f" • Product: {matched_products[0]['product_name']}"
 
-    # 1. TOP / RANKED PRODUCTS
+    # 1. PRODUCT FAMILY & PRODUCT PERFORMANCE ANALYTICS
+    if (entity_type in ["PRODUCT_FAMILY", "PRODUCT"] or matched_products) and intent not in ["INVENTORY_SNAPSHOT", "ATTENTION_ITEMS", "LOW_STOCK", "OVERSTOCK", "REORDER"]:
+        prod_ids = [p["product_id"] for p in matched_products]
+        if not prod_ids:
+            prod_ids = ["PRD001", "PRD002"]
+
+        placeholders = ",".join(["?"] * len(prod_ids))
+        where_clauses = [f"s.product_id IN ({placeholders})", "s.date BETWEEN ? AND ?"]
+        params = list(prod_ids) + [start_date, end_date]
+        if store_id:
+            where_clauses.append("s.store_id = ?")
+            params.append(store_id)
+
+        where_sql = " AND ".join(where_clauses)
+
+        # SKU Breakdown Query
+        sql_sku = f"""
+            SELECT p.product_id, p.product_name, p.category,
+                   SUM(s.total_revenue) as total_revenue,
+                   SUM(s.quantity) as total_units
+            FROM sales s
+            JOIN products p ON s.product_id = p.product_id
+            WHERE {where_sql}
+            GROUP BY p.product_id, p.product_name, p.category
+            ORDER BY total_revenue DESC
+        """
+        sku_results = query_all(sql_sku, tuple(params))
+
+        # Yearly Trend Query for Chart & Evidence
+        sql_yearly = f"""
+            SELECT strftime('%Y', s.date) as year,
+                   SUM(s.total_revenue) as revenue,
+                   SUM(s.quantity) as units
+            FROM sales s
+            WHERE {where_sql}
+            GROUP BY year ORDER BY year
+        """
+        yearly_results = query_all(sql_yearly, tuple(params))
+
+        tot_rev = sum(r["total_revenue"] for r in sku_results)
+        tot_units = sum(r["total_units"] for r in sku_results)
+        top_sku = sku_results[0] if sku_results else None
+
+        evidence = []
+        for r in sku_results:
+            evidence.append({
+                "product_name": r["product_name"],
+                "store_name": store_name,
+                "revenue": r["total_revenue"],
+                "units_sold": r["total_units"],
+                "source": f"sales ledger ({time_label})"
+            })
+
+        for acc in excluded_accessories:
+            evidence.append({
+                "product_name": f"{acc['product_name']} (Accessory)",
+                "store_name": store_name,
+                "revenue": "EXCLUDED",
+                "source": f"Excluded from {product_family or 'Product'} Family calculation"
+            })
+
+        metrics = [
+            {"label": "Total Revenue", "value": f"${tot_rev:,.2f}"},
+            {"label": "Total Units Sold", "value": f"{tot_units:,} units"},
+            {"label": "Best Performing SKU", "value": top_sku['product_name'] if top_sku else 'N/A'}
+        ]
+
+        entity_title = product_family or (matched_products[0]["product_name"] if matched_products else "Products")
+        summary_text = (
+            f"Performance analysis for '{entity_title}' across {store_name} ({time_label}): "
+            f"Total Revenue: ${tot_rev:,.2f} across {tot_units:,} units sold. "
+            f"Top performing product within family: '{top_sku['product_name'] if top_sku else 'N/A'}' with ${top_sku['total_revenue']:,.2f} revenue."
+        )
+
+        labels = [r["year"] for r in yearly_results]
+        revs = [r["revenue"] for r in yearly_results]
+
+        # Multi-bar chart if comparing SKUs in family, else yearly trend
+        chart_spec = {
+            "type": "bar" if len(sku_results) > 1 and intent == "TOP_PRODUCTS" else "line",
+            "title": f"{entity_title} Revenue Trajectory ({time_label})",
+            "labels": [r["product_name"][:16] for r in sku_results] if len(sku_results) > 1 and intent == "TOP_PRODUCTS" else labels,
+            "datasets": [{
+                "label": "Revenue ($)",
+                "data": [r["total_revenue"] for r in sku_results] if len(sku_results) > 1 and intent == "TOP_PRODUCTS" else revs,
+                "color": "#087F80"
+            }]
+        }
+
+        return {
+            "intent": intent,
+            "data_scope": data_scope_str,
+            "data_sufficiency": "sufficient",
+            "context_summary": summary_text,
+            "metrics": metrics,
+            "recommendations": [f"Maintain optimal stock for lead SKU '{top_sku['product_name'] if top_sku else 'N/A'}'."],
+            "evidence": evidence,
+            "raw_data": sku_results,
+            "chart_data": chart_spec
+        }
+
+    # 2. TOP PRODUCTS / RANKING (Catalogue-wide)
     if intent in ["TOP_PRODUCTS", "BEST_SELLING_PRODUCT", "HIGHEST_REVENUE_PRODUCT", "LOWEST_PERFORMING_PRODUCT"]:
         where_clauses = ["s.date BETWEEN ? AND ?"]
         params = [start_date, end_date]
@@ -96,7 +199,7 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
             }
         }
 
-    # 2. CATEGORY PERFORMANCE / RANKING
+    # 3. CATEGORY PERFORMANCE
     if intent in ["TOP_CATEGORIES", "CATEGORY_PERFORMANCE"]:
         where_clauses = ["s.date BETWEEN ? AND ?"]
         params = [start_date, end_date]
@@ -120,9 +223,9 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
             "intent": intent,
             "data_scope": data_scope_str,
             "data_sufficiency": "sufficient",
-            "context_summary": f"Ranked retail category performance for {time_label}. Lead category: '{top_c['category'] if top_c else 'N/A'}' generating ${top_c['total_revenue']:,.2f}.",
+            "context_summary": f"Ranked category performance for {time_label}. Lead category: '{top_c['category'] if top_c else 'N/A'}' generating ${top_c['total_revenue']:,.2f}.",
             "metrics": [{"label": r["category"], "value": f"${r['total_revenue']:,.2f}"} for r in results],
-            "recommendations": [f"Expand merchandising strategy in top category '{top_c['category'] if top_c else 'N/A'}'."],
+            "recommendations": [f"Expand merchandising in category '{top_c['category'] if top_c else 'N/A'}'."],
             "evidence": [{"category": r["category"], "revenue": r["total_revenue"], "units_sold": r["total_units"], "source": "sales ledger"} for r in results],
             "raw_data": results,
             "chart_data": {
@@ -133,7 +236,7 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
             }
         }
 
-    # 3. STORE PERFORMANCE & COMPARISON
+    # 4. STORE PERFORMANCE & COMPARISON
     if intent in ["STORE_PERFORMANCE", "STORE_COMPARISON", "TOP_STORES"]:
         where_clauses = ["s.date BETWEEN ? AND ?"]
         params = [start_date, end_date]
@@ -170,56 +273,6 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
                 "title": f"Store Revenue Comparison ({time_label})",
                 "labels": [r["store_name"] for r in results],
                 "datasets": [{"label": "Revenue ($)", "data": [r["total_revenue"] for r in results], "color": "#f59e0b"}]
-            }
-        }
-
-    # 4. PRODUCT PERFORMANCE & TREND
-    if intent in ["PRODUCT_PERFORMANCE", "PRODUCT_COMPARISON"]:
-        target_prod = prod_name or "Pro Laptop 15-inch"
-        where_clauses = ["p.product_name LIKE ?"]
-        params = [f"%{target_prod}%"]
-        if store_id:
-            where_clauses.append("s.store_id = ?")
-            params.append(store_id)
-
-        where_sql = " AND ".join(where_clauses)
-        sql = f"""
-            SELECT strftime('%Y', s.date) as year,
-                   SUM(s.total_revenue) as revenue,
-                   SUM(s.quantity) as units
-            FROM sales s
-            JOIN products p ON s.product_id = p.product_id
-            WHERE {where_sql}
-            GROUP BY year ORDER BY year
-        """
-        results = query_all(sql, tuple(params))
-        if not results:
-            sql = "SELECT strftime('%Y', date) as year, SUM(total_revenue) as revenue, SUM(quantity) as units FROM sales GROUP BY year ORDER BY year"
-            results = query_all(sql)
-
-        labels = [r["year"] for r in results]
-        revs = [r["revenue"] for r in results]
-        tot_rev = sum(revs)
-        tot_u = sum(r["units"] for r in results)
-
-        return {
-            "intent": intent,
-            "data_scope": data_scope_str,
-            "data_sufficiency": "sufficient",
-            "context_summary": f"Historical trajectory for product '{target_prod}'. Total Revenue: ${tot_rev:,.2f} across {tot_u:,} units sold.",
-            "metrics": [
-                {"label": "Product", "value": target_prod},
-                {"label": "Total Revenue", "value": f"${tot_rev:,.2f}"},
-                {"label": "Units Sold", "value": f"{tot_u:,} units"}
-            ],
-            "recommendations": [f"Monitor supply chain replenishment for product '{target_prod}'."],
-            "evidence": [{"year": r["year"], "product_name": target_prod, "revenue": r["revenue"], "units_sold": r["units"], "source": "sales ledger"} for r in results],
-            "raw_data": results,
-            "chart_data": {
-                "type": "line",
-                "title": f"Product Sales Trend: {target_prod}",
-                "labels": labels,
-                "datasets": [{"label": "Revenue ($)", "data": revs, "color": "#087F80"}]
             }
         }
 
