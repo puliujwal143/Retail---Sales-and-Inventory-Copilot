@@ -1,4 +1,4 @@
-// RetailIQ Enterprise B2B Frontend Engine - Reference Match
+// RetailIQ Enterprise B2B Frontend Engine - Fixed Layout & ID Matching
 document.addEventListener("DOMContentLoaded", () => {
     // Global State
     const state = {
@@ -15,15 +15,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const navItems = document.querySelectorAll(".nav-item");
     const tabViews = document.querySelectorAll(".tab-view");
     const globalStoreSelect = document.getElementById("global-store-select");
-    const currentTabTitle = document.getElementById("current-tab-title");
+    const globalSearchInput = document.getElementById("global-search-input");
 
-    // Modal References
-    const copilotModal = document.getElementById("copilot-modal");
-    const copilotCloseBtn = document.getElementById("copilot-modal-close");
-    const openCopilotBtn = document.getElementById("open-copilot-modal-btn");
-    const sidebarPromoBtn = document.getElementById("sidebar-promo-btn");
-
-    // Product Detail Modal
+    // Product Modal References
     const productModal = document.getElementById("product-detail-modal");
     const productModalCloseBtn = document.getElementById("modal-close-btn");
 
@@ -33,7 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
     async function init() {
         setupNavigation();
         setupFilters();
-        setupCopilotModal();
+        setupCopilotTab();
         setupProductModal();
 
         await loadStores();
@@ -42,9 +36,10 @@ document.addEventListener("DOMContentLoaded", () => {
         await loadSalesWorkspace();
     }
 
-    // Navigation setup
+    // Navigation & Tab Switching
     function setupNavigation() {
-        navItems.forEach(btn => {
+        // Navigation buttons & Quick jump buttons
+        document.querySelectorAll(".nav-item, .quick-jump, .panel-link-btn, .btn-ask-copilot").forEach(btn => {
             btn.addEventListener("click", () => {
                 const targetTab = btn.getAttribute("data-tab");
                 if (!targetTab) return;
@@ -58,38 +53,23 @@ document.addEventListener("DOMContentLoaded", () => {
                     }
                 }
 
-                navItems.forEach(b => b.classList.remove("active"));
-                tabViews.forEach(v => v.classList.remove("active"));
-
-                const activeNav = document.querySelector(`.nav-item[data-tab="${targetTab}"]`);
-                if (activeNav) activeNav.classList.add("active");
-
-                const targetSec = document.getElementById(`tab-${targetTab}`);
-                if (targetSec) targetSec.classList.add("active");
-                state.currentTab = targetTab;
-
-                // Update title
-                switch (targetTab) {
-                    case "dashboard":
-                        currentTabTitle.textContent = "Executive Dashboard";
-                        break;
-                    case "inventory":
-                        currentTabTitle.textContent = "Inventory Intelligence";
-                        break;
-                    case "sales":
-                        currentTabTitle.textContent = "Sales Analytics Workspace";
-                        break;
-                    case "copilot":
-                        currentTabTitle.textContent = "AI Copilot Workspace";
-                        break;
+                const prompt = btn.getAttribute("data-prompt");
+                if (prompt && targetTab === "copilot") {
+                    const chatInput = document.getElementById("chat-input");
+                    if (chatInput) {
+                        chatInput.value = prompt;
+                        sendChatQuery(prompt);
+                    }
                 }
+
+                switchToTab(targetTab);
             });
         });
 
-        // Time Range Buttons on Dashboard
-        document.querySelectorAll(".range-picker .range-btn").forEach(btn => {
+        // Time Range Buttons on Dashboard Chart
+        document.querySelectorAll(".time-range-picker .range-btn").forEach(btn => {
             btn.addEventListener("click", () => {
-                document.querySelectorAll(".range-picker .range-btn").forEach(b => b.classList.remove("active"));
+                document.querySelectorAll(".time-range-picker .range-btn").forEach(b => b.classList.remove("active"));
                 btn.classList.add("active");
                 state.dashboardTimeframe = parseInt(btn.getAttribute("data-days"));
                 loadDashboardChartOnly();
@@ -97,13 +77,38 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    function switchToTab(tabId) {
+        navItems.forEach(b => b.classList.remove("active"));
+        tabViews.forEach(v => v.classList.remove("active"));
+
+        const activeNav = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
+        if (activeNav) activeNav.classList.add("active");
+
+        const targetSec = document.getElementById(`tab-${tabId}`);
+        if (targetSec) targetSec.classList.add("active");
+        state.currentTab = tabId;
+    }
+
     function setupFilters() {
         if (globalStoreSelect) {
             globalStoreSelect.addEventListener("change", (e) => {
                 state.selectedStore = e.target.value;
+                const salesStoreSel = document.getElementById("sales-store-select");
+                if (salesStoreSel) salesStoreSel.value = e.target.value;
                 loadDashboard();
                 renderInventoryTable();
                 loadSalesWorkspace();
+            });
+        }
+
+        if (globalSearchInput) {
+            globalSearchInput.addEventListener("input", (e) => {
+                const q = e.target.value.toLowerCase();
+                const invSearch = document.getElementById("inv-search-input");
+                if (invSearch && state.currentTab === "inventory") {
+                    invSearch.value = q;
+                    renderInventoryTable();
+                }
             });
         }
 
@@ -134,33 +139,22 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Copilot Drawer / Modal Setup
-    function setupCopilotModal() {
-        const toggleModal = (show) => {
-            if (show) copilotModal.classList.remove("hidden");
-            else copilotModal.classList.add("hidden");
-        };
-
-        if (openCopilotBtn) openCopilotBtn.addEventListener("click", () => toggleModal(true));
-        if (sidebarPromoBtn) sidebarPromoBtn.addEventListener("click", () => toggleModal(true));
-        if (copilotCloseBtn) copilotCloseBtn.addEventListener("click", () => toggleModal(false));
-
-        if (copilotModal) {
-            copilotModal.addEventListener("click", (e) => {
-                if (e.target === copilotModal) toggleModal(false);
-            });
-        }
-
-        // Setup chat inside drawer
+    // AI Copilot Setup
+    function setupCopilotTab() {
         const chatForm = document.getElementById("chat-form");
         const chatInput = document.getElementById("chat-input");
-        const presetChips = document.querySelectorAll(".preset-chip");
+        const promptPills = document.querySelectorAll(".prompt-pill, .suggestion-card");
+        const sidebarTrigger = document.getElementById("sidebar-copilot-trigger");
 
-        presetChips.forEach(chip => {
-            chip.addEventListener("click", () => {
-                const prompt = chip.getAttribute("data-prompt");
+        if (sidebarTrigger) {
+            sidebarTrigger.addEventListener("click", () => switchToTab("copilot"));
+        }
+
+        promptPills.forEach(pill => {
+            pill.addEventListener("click", () => {
+                const prompt = pill.getAttribute("data-prompt");
                 if (prompt) {
-                    chatInput.value = prompt;
+                    if (chatInput) chatInput.value = prompt;
                     sendChatQuery(prompt);
                 }
             });
@@ -188,7 +182,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Load Stores dropdown
+    // Load Stores Dropdown Options
     async function loadStores() {
         try {
             const res = await fetch("/api/stores");
@@ -220,7 +214,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Load Dashboard Data
+    // Load Executive Dashboard Data
     async function loadDashboard() {
         try {
             const url = `/api/dashboard?store_id=${state.selectedStore}`;
@@ -228,27 +222,27 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = await res.json();
             state.dashboardData = data;
 
-            // KPI Values
+            // KPI Values Alignment
             const revEl = document.getElementById("kpi-revenue");
             const unitsEl = document.getElementById("kpi-units");
-            const lowStockEl = document.getElementById("kpi-low-stock");
-            const overstockEl = document.getElementById("kpi-overstock");
-            const growthEl = document.getElementById("kpi-growth");
+            const alertsEl = document.getElementById("kpi-alerts-count");
+            const overstockEl = document.getElementById("kpi-overstock-count");
+            const growthEl = document.getElementById("kpi-growth-rate");
 
             if (revEl) revEl.textContent = `$${data.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
             if (unitsEl) unitsEl.textContent = data.total_units_sold.toLocaleString();
             
             const lowStockTotal = data.critical_low_stock_count + data.warning_low_stock_count;
-            if (lowStockEl) lowStockEl.textContent = lowStockTotal;
+            if (alertsEl) alertsEl.textContent = lowStockTotal;
             if (overstockEl) overstockEl.textContent = data.overstock_count;
-            if (growthEl) growthEl.textContent = "+12.4%";
+            if (growthEl) growthEl.textContent = "+21.6%";
 
-            // Render mini sparklines
-            renderMiniSparkline("sparkline-revenue", [12000, 14500, 13200, 16800, 18500, 21000, data.total_revenue], "#087F80");
-            renderMiniSparkline("sparkline-units", [420, 480, 450, 520, 590, 610, data.total_units_sold], "#087F80");
-            renderMiniSparkline("sparkline-low-stock", [8, 12, 10, 14, 9, 11, lowStockTotal], "#DC2626");
+            // Render mini sparklines cleanly inside KPI cards
+            renderMiniSparkline("sparkline-revenue", [12000, 14500, 13200, 16800, 18500, 21000, data.total_revenue], "#16A34A");
+            renderMiniSparkline("sparkline-units", [420, 480, 450, 520, 590, 610, data.total_units_sold], "#8B5CF6");
+            renderMiniSparkline("sparkline-lowstock", [8, 12, 10, 14, 9, 11, lowStockTotal], "#F59E0B");
             renderMiniSparkline("sparkline-overstock", [15, 18, 14, 16, 20, 19, data.overstock_count], "#2563EB");
-            renderMiniSparkline("sparkline-growth", [4, 6, 8, 7, 10, 11, 12.4], "#16A34A");
+            renderMiniSparkline("sparkline-growth", [4, 6, 8, 7, 10, 11, 21.6], "#16A34A");
 
             loadNeedsAttentionItems();
             loadDashboardChartOnly();
@@ -269,15 +263,15 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             const res = await fetch(`/api/analytics/charts?days=${state.dashboardTimeframe}&store_id=${state.selectedStore}`);
             const data = await res.json();
-            renderSVGChart("revenue-sales-chart-container", data.revenue_trend);
+            renderSVGChart("dashboard-sales-chart", data.revenue_trend);
         } catch (err) {
             console.error("Failed to load dashboard chart:", err);
         }
     }
 
-    // Load Priority Attention Items
+    // Load Priority Needs Attention Items
     async function loadNeedsAttentionItems() {
-        const container = document.getElementById("needs-attention-list");
+        const container = document.getElementById("attention-items-container");
         if (!container) return;
 
         try {
@@ -295,7 +289,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         <div class="alert-title">${item.summary}</div>
                         <div class="alert-subtext">Action: <strong>${item.recommended_action}</strong></div>
                     </div>
-                    <button class="alert-action-btn" onclick="alert('Reorder initiated for ${item.summary.replace(/'/g, "\\'")}!')">Reorder</button>
+                    <button class="alert-action-btn" onclick="alert('Reorder process initiated for ${item.summary.replace(/'/g, "\\'")}!')">Reorder</button>
                 </div>
             `).join("");
         } catch (err) {
@@ -303,9 +297,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Render Inventory Donut & Legend Table
+    // Render Inventory Health Donut Chart & Legend Table
     function renderInventoryDonut(data) {
-        const container = document.getElementById("inventory-health-donut-container");
+        const container = document.getElementById("inventory-donut-container");
         if (!container) return;
 
         const total = data.total_inventory_units || 120;
@@ -332,9 +326,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const dashO = `${strokeO} ${circum - strokeO}`; const offO = offset;
 
         container.innerHTML = `
-            <div class="donut-layout">
-                <div class="donut-chart-container">
-                    <svg viewBox="0 0 100 100" style="width:130px; height:130px; transform: rotate(-90deg);">
+            <div class="donut-chart-layout">
+                <div style="position:relative; width:120px; height:120px; margin:0 auto;">
+                    <svg viewBox="0 0 100 100" style="width:120px; height:120px; transform: rotate(-90deg);">
                         <circle cx="50" cy="50" r="40" fill="none" stroke="#F1F5F9" stroke-width="12" />
                         <circle cx="50" cy="50" r="40" fill="none" stroke="#16A34A" stroke-width="12" stroke-dasharray="${dashH}" stroke-dashoffset="${offH}" />
                         <circle cx="50" cy="50" r="40" fill="none" stroke="#D97706" stroke-width="12" stroke-dasharray="${dashW}" stroke-dashoffset="${offW}" />
@@ -347,22 +341,22 @@ document.addEventListener("DOMContentLoaded", () => {
                     </div>
                 </div>
 
-                <div class="inventory-legend-table">
-                    <div class="legend-row">
-                        <div class="legend-label-group"><span class="legend-dot dot-healthy"></span> Healthy Stock</div>
-                        <div class="legend-val">${healthy} <span style="font-size:10px; color:var(--text-muted);">(${Math.round(pctH)}%)</span></div>
+                <div style="width:100%; display:flex; flex-direction:column; gap:4px; font-size:11px;">
+                    <div style="display:flex; justify-content:space-between; padding:2px 0;">
+                        <span><span style="color:#16A34A;">●</span> Healthy Stock</span>
+                        <strong>${healthy} (${Math.round(pctH)}%)</strong>
                     </div>
-                    <div class="legend-row">
-                        <div class="legend-label-group"><span class="legend-dot dot-warning"></span> Warning (&lt;=7D)</div>
-                        <div class="legend-val">${warning} <span style="font-size:10px; color:var(--text-muted);">(${Math.round(pctW)}%)</span></div>
+                    <div style="display:flex; justify-content:space-between; padding:2px 0;">
+                        <span><span style="color:#D97706;">●</span> Warning (&lt;=7D)</span>
+                        <strong>${warning} (${Math.round(pctW)}%)</strong>
                     </div>
-                    <div class="legend-row">
-                        <div class="legend-label-group"><span class="legend-dot dot-critical"></span> Critical (&lt;=2D)</div>
-                        <div class="legend-val">${critical} <span style="font-size:10px; color:var(--text-muted);">(${Math.round(pctC)}%)</span></div>
+                    <div style="display:flex; justify-content:space-between; padding:2px 0;">
+                        <span><span style="color:#DC2626;">●</span> Critical (&lt;=2D)</span>
+                        <strong>${critical} (${Math.round(pctC)}%)</strong>
                     </div>
-                    <div class="legend-row">
-                        <div class="legend-label-group"><span class="legend-dot dot-overstock"></span> Overstock</div>
-                        <div class="legend-val">${overstock} <span style="font-size:10px; color:var(--text-muted);">(${Math.round(pctO)}%)</span></div>
+                    <div style="display:flex; justify-content:space-between; padding:2px 0;">
+                        <span><span style="color:#2563EB;">●</span> Overstock</span>
+                        <strong>${overstock} (${Math.round(pctO)}%)</strong>
                     </div>
                 </div>
             </div>
@@ -374,14 +368,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const tbody = document.getElementById("top-products-tbody");
         if (!tbody || !products) return;
 
-        tbody.innerHTML = products.map((p, idx) => `
+        tbody.innerHTML = products.slice(0, 5).map((p, idx) => `
             <tr>
                 <td><strong>#${idx + 1}</strong></td>
                 <td><strong>${p.product_name}</strong></td>
-                <td><span class="badge badge-info">${p.category}</span></td>
                 <td class="text-right"><strong>${p.units_sold}</strong></td>
                 <td class="text-right"><strong>$${p.revenue.toLocaleString('en-US', {minimumFractionDigits: 2})}</strong></td>
-                <td><span class="badge badge-success">+18.5%</span></td>
+                <td class="text-right"><span class="badge badge-success">+18.5%</span></td>
             </tr>
         `).join("");
     }
@@ -396,23 +389,16 @@ document.addEventListener("DOMContentLoaded", () => {
             const targetPct = Math.min(100, Math.round((rev / 50000) * 100));
             return `
                 <tr>
-                    <td><strong>${s.store_name}</strong><br><span style="font-size:10px; color:var(--text-muted);">${s.location}</span></td>
+                    <td><strong>${s.store_name}</strong></td>
                     <td class="text-right"><strong>$${rev.toLocaleString('en-US', {minimumFractionDigits: 2})}</strong></td>
-                    <td>
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <div style="flex-grow:1; height:6px; background:#F1F5F9; border-radius:3px; overflow:hidden;">
-                                <div style="width:${targetPct}%; height:100%; background:var(--brand-teal); border-radius:3px;"></div>
-                            </div>
-                            <span style="font-size:11px; font-weight:700; color:var(--text-secondary);">${targetPct}%</span>
-                        </div>
-                    </td>
-                    <td><span class="badge badge-success">Optimal</span></td>
+                    <td class="text-right"><strong>${Math.round(rev / 150)}</strong></td>
+                    <td class="text-right"><span class="badge badge-success">+${targetPct}%</span></td>
                 </tr>
             `;
         }).join("");
     }
 
-    // Load Inventory Workspace Data
+    // Load Inventory Data
     async function loadInventory() {
         try {
             const res = await fetch("/api/inventory");
@@ -454,7 +440,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Render Inventory Workspace Table
+    // Render Inventory Table
     function renderInventoryTable() {
         const tbody = document.getElementById("inventory-tbody");
         if (!tbody) return;
@@ -481,13 +467,13 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         tbody.innerHTML = filtered.map(i => {
-            let statusBadge = `<span class="badge badge-success">Healthy</span>`;
+            let statusBadge = `<span class="badge badge-healthy">HEALTHY</span>`;
             if (i.status === "CRITICAL" || i.status === "OUT_OF_STOCK") {
                 statusBadge = `<span class="badge badge-critical">CRITICAL</span>`;
             } else if (i.status === "WARNING") {
                 statusBadge = `<span class="badge badge-warning">WARNING</span>`;
             } else if (i.status === "SLOW_MOVING") {
-                statusBadge = `<span class="badge badge-info">SLOW MOVING</span>`;
+                statusBadge = `<span class="badge badge-slow">SLOW MOVING</span>`;
             } else if (i.status === "OVERSTOCK") {
                 statusBadge = `<span class="badge badge-info">OVERSTOCK</span>`;
             }
@@ -575,7 +561,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Load Sales Analytics Workspace Data (6 Charts)
+    // Load Sales Analytics Workspace Data
     async function loadSalesWorkspace() {
         try {
             const res = await fetch(`/api/analytics/charts?days=${state.salesTimeframe}&store_id=${state.selectedStore}`);
@@ -593,7 +579,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (salesRevEl) salesRevEl.textContent = `$${revSum.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
             if (salesUnitsEl) salesUnitsEl.textContent = unitSum.toLocaleString();
             if (salesDailyEl) salesDailyEl.textContent = `$${dailyAvg.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
-            if (salesTopCatEl) salesTopCatEl.textContent = data.category_chart.labels[0] || "Electronics";
+            if (salesTopCatEl) salesTopCatEl.textContent = data.category_chart.labels[0] || "Computers";
 
             renderSVGChart("chart-sales-revenue", data.revenue_trend);
             renderSVGChart("chart-sales-units", data.units_trend);
@@ -643,11 +629,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Mini Sparkline Renderer
+    // Mini Sparkline Renderer inside KPI cards
     function renderMiniSparkline(containerId, dataVals, color = "#087F80") {
         const container = document.getElementById(containerId);
         if (!container || !dataVals || dataVals.length === 0) return;
-        const width = 120;
+        const width = 80;
         const height = 30;
         const maxVal = Math.max(...dataVals) || 1;
         const minVal = Math.min(...dataVals) || 0;
@@ -672,7 +658,7 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
     }
 
-    // PURE SVG CHART RENDER ENGINE (Light Theme Optimized)
+    // SVG Chart Render Engine (Strict Height & Responsive Contained Specs)
     function renderSVGChart(containerId, chartSpec) {
         const container = document.getElementById(containerId);
         if (!container || !chartSpec || !chartSpec.labels || chartSpec.labels.length === 0) {
@@ -682,7 +668,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const width = 500;
         const height = 200;
-        const padding = 35;
+        const padding = 30;
 
         const type = chartSpec.type || "line";
         const labels = chartSpec.labels;
@@ -709,14 +695,14 @@ document.addEventListener("DOMContentLoaded", () => {
             `;
 
             const svgHTML = `
-                <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%; overflow: visible;">
+                <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%; overflow: hidden;">
                     <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#E5EAF0" stroke-width="1" />
                     <line x1="${padding}" y1="${padding}" x2="${width - padding}" y2="${padding}" stroke="#E5EAF0" stroke-dasharray="4" stroke-width="1" />
                     ${fillHTML}
                     <polyline fill="none" stroke="${mainColor}" stroke-width="2.5" stroke-linecap="round" points="${points}" />
                     <text x="${padding}" y="${padding - 8}" fill="#64748B" font-size="10" font-weight="600">$${Math.round(maxVal).toLocaleString()}</text>
-                    <text x="${padding}" y="${height - 8}" fill="#64748B" font-size="10">${labels[0]}</text>
-                    <text x="${width - padding - 45}" y="${height - 8}" fill="#64748B" font-size="10">${labels[labels.length - 1]}</text>
+                    <text x="${padding}" y="${height - 6}" fill="#64748B" font-size="10">${labels[0]}</text>
+                    <text x="${width - padding - 45}" y="${height - 6}" fill="#64748B" font-size="10">${labels[labels.length - 1]}</text>
                 </svg>
             `;
             container.innerHTML = svgHTML;
@@ -732,7 +718,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const w = barWidth * 0.7;
                 return `
                     <rect x="${x}" y="${y}" width="${w}" height="${barHeight}" fill="${mainColor}" rx="3" />
-                    <text x="${x + w/2}" y="${height - 8}" fill="#64748B" font-size="9" text-anchor="middle">${labels[i] ? labels[i].substring(0, 8) : ''}</text>
+                    <text x="${x + w/2}" y="${height - 6}" fill="#64748B" font-size="9" text-anchor="middle">${labels[i] ? labels[i].substring(0, 8) : ''}</text>
                 `;
             }).join("");
 
@@ -767,25 +753,27 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // AI COPILOT CHAT QUERY FUNCTION
+    // AI Copilot Chat Execution
     async function sendChatQuery(userQuery) {
         const messagesContainer = document.getElementById("chat-messages-container");
+        const welcomeCard = document.getElementById("copilot-welcome-card");
         const loadingCard = document.getElementById("ai-loading-indicator");
 
         if (!messagesContainer) return;
+        if (welcomeCard) welcomeCard.style.display = "none";
 
         // User Message
         const userMsgDiv = document.createElement("div");
-        userMsgDiv.className = "chat-bubble user-bubble";
+        userMsgDiv.className = "chat-message user-message";
         userMsgDiv.innerHTML = `<div>${userQuery}</div>`;
         messagesContainer.appendChild(userMsgDiv);
 
         if (loadingCard) loadingCard.classList.remove("hidden");
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
-        // Assistant Message Placeholder
+        // Assistant Placeholder Message
         const assistantMsgDiv = document.createElement("div");
-        assistantMsgDiv.className = "chat-bubble assistant-bubble";
+        assistantMsgDiv.className = "chat-message assistant-message";
         assistantMsgDiv.innerHTML = `
             <div style="font-weight:700; color:var(--brand-teal); font-size:12px; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
                 ✨ RetailIQ Evidence Copilot
@@ -817,7 +805,7 @@ document.addEventListener("DOMContentLoaded", () => {
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
-    // Render Grounded BI Executive Response in Chat
+    // Format Structured Executive BI Response inside Chat Message Box
     function renderCopilotResponse(msgElement, data) {
         const isSufficient = data.data_sufficiency === "sufficient";
         const sufficiencyBadge = isSufficient ?
