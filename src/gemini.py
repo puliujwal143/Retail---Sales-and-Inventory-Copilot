@@ -130,6 +130,7 @@ Remember: Respond ONLY with valid JSON following the schema. Ground every statem
             parsed_json.setdefault("assumptions", assumptions)
             parsed_json.setdefault("evidence", evidence)
             parsed_json["data_scope"] = data_scope
+            parsed_json["intent"] = intent
             parsed_json["chart"] = chart
             return parsed_json
         else:
@@ -187,6 +188,7 @@ def create_deterministic_fallback(processed_query: Dict[str, Any], note: str = "
         answer += f" ({note})"
 
     return {
+        "intent": intent,
         "answer": answer,
         "data_scope": data_scope,
         "key_metrics": metrics,
