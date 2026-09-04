@@ -115,15 +115,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 state.selectedDate = null;
                 globalDatePicker.style.display = "none";
             } else if (val === "yesterday") {
-                const d = new Date(now); d.setDate(d.getDate() - 1);
+                const d = new Date("2026-09-03"); d.setDate(d.getDate() - 1);
                 state.selectedDate = d.toISOString().split("T")[0];
                 globalDatePicker.style.display = "none";
-            } else if (val === "7d") {
-                const d = new Date(now); d.setDate(d.getDate() - 7);
-                state.selectedDate = d.toISOString().split("T")[0];
-                globalDatePicker.style.display = "none";
-            } else if (val === "30d") {
-                const d = new Date(now); d.setDate(d.getDate() - 30);
+            } else if (val.endsWith("d")) {
+                const days = parseInt(val.replace("d", ""));
+                const d = new Date("2026-09-03"); d.setDate(d.getDate() - days);
                 state.selectedDate = d.toISOString().split("T")[0];
                 globalDatePicker.style.display = "none";
             } else if (val === "custom") {
@@ -664,6 +661,23 @@ document.addEventListener("DOMContentLoaded", () => {
             renderSVGChart("chart-sales-category", data.category_chart);
             renderSVGChart("chart-sales-top-products", data.top_products_chart);
             renderSVGChart("chart-sales-store", data.store_chart);
+
+            // Fetch & Render 10-Year Yearly Performance & Seasonality Charts
+            try {
+                const yearlyRes = await fetch(`/api/yearly-performance?store_id=${state.selectedStore}`);
+                const yearlyData = await yearlyRes.json();
+                if (yearlyData && yearlyData.yearly_chart) {
+                    renderSVGChart("chart-sales-yearly", yearlyData.yearly_chart);
+                }
+
+                const seasonRes = await fetch(`/api/seasonality?store_id=${state.selectedStore}`);
+                const seasonData = await seasonRes.json();
+                if (seasonData && seasonData.seasonality_chart) {
+                    renderSVGChart("chart-sales-seasonality", seasonData.seasonality_chart);
+                }
+            } catch (errYearly) {
+                console.error("Yearly chart render error:", errYearly);
+            }
 
             const spikesContainer = document.getElementById("spikes-drops-container");
             if (spikesContainer) {

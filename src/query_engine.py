@@ -52,6 +52,92 @@ def process_query_intent(user_query: str) -> Dict[str, Any]:
     q_lower = user_query.strip().lower()
     target_date = extract_date_from_query(user_query)
 
+    # 0.0 10-YEAR YEARLY PERFORMANCE & SEASONALITY INTENT
+    if any(k in q_lower for k in ["yearly", "10-year", "10 year", "over the years", "best year", "highest revenue year", "best performing year", "seasonality", "annual revenue", "last 10 years", "last 5 years"]):
+        from src.sales_rules import get_yearly_performance, get_seasonality_analysis
+        yearly = get_yearly_performance()
+        season = get_seasonality_analysis()
+
+        metrics = [
+            {"label": "Best Revenue Year", "value": f"{yearly['best_year']}"},
+            {"label": "Fastest Growth Year", "value": f"{yearly['fastest_growth_year']}"},
+            {"label": "Lowest Revenue Year", "value": f"{yearly['lowest_year']}"},
+            {"label": "Peak Demand Month", "value": f"{season['peak_month']}"}
+        ]
+
+        rec_list = [
+            f"Capitalize on peak seasonal demand in {season['peak_month']} across top performing categories.",
+            f"Maintain strategic inventory allocation modeled after high-growth year {yearly['fastest_growth_year']}."
+        ]
+
+        evidence_list = []
+        for y_row in yearly["yearly_table"]:
+            evidence_list.append({
+                "product_name": "All Store SKUs",
+                "store_name": "All Locations",
+                "current_stock": y_row["total_revenue"],
+                "avg_daily_sales": y_row["yoy_revenue_growth"],
+                "days_remaining": y_row["total_units"],
+                "source": f"10-Year Financial Ledger ({y_row['year']})"
+            })
+
+        return {
+            "intent": "YEARLY_PERFORMANCE",
+            "user_query": user_query,
+            "data_sufficiency": "sufficient",
+            "context_summary": f"10-Year historical retail analysis (2016-2026). Best Year: {yearly['best_year']}. Fastest YoY Growth Year: {yearly['fastest_growth_year']}. Peak Seasonal Month: {season['peak_month']}.",
+            "metrics": metrics,
+            "recommendations": rec_list,
+            "evidence": evidence_list,
+            "assumptions": ["Deterministic 10-year sales audit across 5 store locations"],
+            "chart": yearly["yearly_chart"],
+            "raw_data": yearly["yearly_table"]
+        }
+
+    # 0.01 YEAR COMPARISON INTENT (e.g. "compare 2018 and 2025")
+    year_matches = re.findall(r'\b(20\d\d)\b', user_query)
+    if len(year_matches) >= 2 and any(k in q_lower for k in ["compare", "vs", "versus", "from", "to", "between"]):
+        y1, y2 = sorted([year_matches[0], year_matches[1]])
+        from src.database import query_all
+        comp_sql = """
+            SELECT strftime('%Y', date) as year, ROUND(SUM(total_revenue), 2) as revenue, SUM(quantity) as units
+            FROM sales
+            WHERE strftime('%Y', date) IN (?, ?)
+            GROUP BY strftime('%Y', date)
+            ORDER BY year ASC
+        """
+        rows = query_all(comp_sql, (y1, y2))
+        if len(rows) == 2:
+            r1, r2 = rows[0], rows[1]
+            growth_pct = round(((r2["revenue"] - r1["revenue"]) / r1["revenue"]) * 100, 1) if r1["revenue"] > 0 else 0
+            
+            chart_spec = {
+                "type": "bar",
+                "title": f"Revenue Comparison: {y1} vs {y2}",
+                "labels": [y1, y2],
+                "datasets": [{"label": "Annual Revenue ($)", "data": [r1["revenue"], r2["revenue"]], "color": "#087F80"}]
+            }
+
+            return {
+                "intent": "YEAR_COMPARISON",
+                "user_query": user_query,
+                "data_sufficiency": "sufficient",
+                "context_summary": f"Comparison between {y1} and {y2}: Revenue grew by +{growth_pct}% from ${r1['revenue']:,.2f} ({y1}) to ${r2['revenue']:,.2f} ({y2}).",
+                "metrics": [
+                    {"label": f"{y1} Revenue", "value": f"${r1['revenue']:,.2f}"},
+                    {"label": f"{y2} Revenue", "value": f"${r2['revenue']:,.2f}"},
+                    {"label": f"10Y Growth ({y1}→{y2})", "value": f"+{growth_pct}%"}
+                ],
+                "recommendations": [f"Business scaled by +{growth_pct}% from {y1} to {y2} across store networks."],
+                "evidence": [
+                    {"product_name": "All Catalog SKUs", "store_name": "All Stores", "current_stock": r1["revenue"], "avg_daily_sales": r1["units"], "days_remaining": 0, "source": f"{y1} Sales Ledger"},
+                    {"product_name": "All Catalog SKUs", "store_name": "All Stores", "current_stock": r2["revenue"], "avg_daily_sales": r2["units"], "days_remaining": 0, "source": f"{y2} Sales Ledger"}
+                ],
+                "assumptions": [f"Calculated from 10-year sales transactions for {y1} and {y2}"],
+                "chart": chart_spec,
+                "raw_data": rows
+            }
+
     # 0. HISTORICAL DATE SNAPSHOT QUERY
     if target_date or any(k in q_lower for k in ["snapshot", "on august", "on aug", "on date", "was our stock on", "inventory on"]):
         snap_date = target_date or "2026-08-15"

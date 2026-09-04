@@ -105,8 +105,14 @@
                         <select id="global-date-select" class="form-select" style="padding-right:24px;">
                             <option value="today">Today (Latest)</option>
                             <option value="yesterday">Yesterday</option>
-                            <option value="7d">7 Days Ago</option>
-                            <option value="30d">30 Days Ago</option>
+                            <option value="7d">Last 7 Days</option>
+                            <option value="30d">Last 30 Days</option>
+                            <option value="90d">Last 90 Days</option>
+                            <option value="180d">Last 6 Months</option>
+                            <option value="365d">Last 1 Year</option>
+                            <option value="1095d">Last 3 Years</option>
+                            <option value="1825d">Last 5 Years</option>
+                            <option value="3650d">Last 10 Years</option>
                             <option value="custom">Custom Date...</option>
                         </select>
                         <input type="date" id="global-date-picker" class="form-input" style="width:145px; min-width:145px; display:none; padding:4px 8px; font-size:12px;">
@@ -429,6 +435,11 @@
                             <option value="30">Last 30 Days</option>
                             <option value="7">Last 7 Days</option>
                             <option value="90">Last 90 Days</option>
+                            <option value="180">Last 6 Months</option>
+                            <option value="365">Last 1 Year</option>
+                            <option value="1095">Last 3 Years</option>
+                            <option value="1825">Last 5 Years</option>
+                            <option value="3650">Last 10 Years</option>
                         </select>
                     </div>
                     <div class="filter-group">
@@ -448,11 +459,19 @@
 
                 <div class="charts-workspace-grid">
                     <div class="panel chart-span-2">
-                        <div class="panel-header"><h3>Revenue Trend</h3><span class="subtitle">Revenue movement over time</span></div>
+                        <div class="panel-header"><h3>10-Year Revenue & Growth Trajectory</h3><span class="subtitle">Annual revenue breakdown (2016 - 2026)</span></div>
+                        <div id="chart-sales-yearly" class="svg-chart-container"></div>
+                    </div>
+                    <div class="panel">
+                        <div class="panel-header"><h3>Monthly Demand Seasonality Profile</h3><span class="subtitle">Avg revenue per month (Jan - Dec)</span></div>
+                        <div id="chart-sales-seasonality" class="svg-chart-container"></div>
+                    </div>
+                    <div class="panel chart-span-2">
+                        <div class="panel-header"><h3>Revenue Movement</h3><span class="subtitle">Revenue movement over selected window</span></div>
                         <div id="chart-sales-revenue" class="svg-chart-container"></div>
                     </div>
                     <div class="panel">
-                        <div class="panel-header"><h3>Units Sold Demand</h3><span class="subtitle">Daily volume trajectory</span></div>
+                        <div class="panel-header"><h3>Units Sold Demand</h3><span class="subtitle">Volume trajectory</span></div>
                         <div id="chart-sales-units" class="svg-chart-container"></div>
                     </div>
                     <div class="panel">

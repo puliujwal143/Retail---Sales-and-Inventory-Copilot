@@ -1,41 +1,41 @@
-product_id,product_name,category,cost_price,unit_price,reorder_point
-PRD001,Pro Laptop 15-inch,Computers,850.0,1200.0,10
-PRD002,Ultra Slim Notebook 13,Computers,650.0,950.0,8
-PRD003,Desktop Workstation i7,Computers,1100.0,1600.0,5
-PRD004,Gaming Desktop RTX,Gaming,1400.0,2000.0,4
-PRD005,Curved Monitor 27-inch,Electronics,180.0,280.0,12
-PRD006,Wireless Ergonomic Mouse,Accessories,18.0,35.0,25
-PRD007,Mechanical RGB Keyboard,Accessories,45.0,85.0,15
-PRD008,USB-C Multi-Port Hub,Accessories,22.0,45.0,20
-PRD009,USB-C Cable 2m,Accessories,4.0,15.0,30
-PRD010,HD Webcam 1080p,Electronics,30.0,60.0,12
-PRD011,Noise-Canceling Headphones,Audio,120.0,220.0,15
-PRD012,Bluetooth Speaker Portable,Audio,35.0,75.0,20
-PRD013,True Wireless Earbuds,Audio,50.0,110.0,25
-PRD014,Studio Condenser Mic,Audio,70.0,130.0,8
-PRD015,Soundbar with Subwoofer,Audio,110.0,210.0,10
-PRD016,Flagship Smartphone 128GB,Mobile,600.0,899.0,10
-PRD017,Budget Smartphone 64GB,Mobile,180.0,299.0,15
-PRD018,Tablet 10-inch 64GB,Mobile,220.0,349.0,12
-PRD019,Smart Fitness Watch,Mobile,85.0,149.0,15
-PRD020,Smart Watch Replacement Band,Mobile,5.0,25.0,20
-PRD021,Robotic Vacuum Cleaner,Home Appliances,180.0,320.0,8
-PRD022,Air Purifier HEPA,Home Appliances,90.0,160.0,10
-PRD023,Compact Espresso Machine,Home Appliances,110.0,199.0,6
-PRD024,Smart LED Desk Lamp,Home Appliances,20.0,45.0,15
-PRD025,Electric Kettle 1.7L,Home Appliances,15.0,35.0,12
-PRD026,Portable SSD 1TB,Office,60.0,105.0,15
-PRD027,External Hard Drive 4TB,Office,70.0,115.0,10
-PRD028,Ergonomic Office Chair,Office,140.0,260.0,5
-PRD029,Motorized Standing Desk,Office,250.0,450.0,4
-PRD030,Wireless Document Scanner,Office,130.0,220.0,5
-PRD031,Next-Gen Gaming Console,Gaming,400.0,499.0,8
-PRD032,Retro Gaming Controller,Gaming,25.0,55.0,15
-PRD033,Gaming Headset 7.1 Surround,Gaming,45.0,89.0,12
-PRD034,VR Headset 128GB,Gaming,290.0,399.0,6
-PRD035,Racing Wheel Controller,Gaming,150.0,270.0,4
-PRD036,Wireless Charging Pad,Accessories,10.0,25.0,20
-PRD037,Laptop Backpack Water Resistant,Accessories,25.0,59.0,15
-PRD038,Surge Protector 8-Outlet,Electronics,12.0,29.0,25
-PRD039,Stylus Pen Universal,Accessories,15.0,39.0,10
-PRD040,Legacy Media Adapter,Electronics,8.0,19.0,10
+product_id,product_name,category,cost_price,unit_price,reorder_point,intro_date
+PRD001,Pro Laptop 15-inch,Computers,850.0,1200.0,10,2016-01-01
+PRD002,Ultra Slim Notebook 13,Computers,650.0,950.0,8,2016-01-01
+PRD003,Desktop Workstation i7,Computers,1100.0,1600.0,5,2016-01-01
+PRD004,Gaming Desktop RTX,Gaming,1400.0,2000.0,4,2016-01-01
+PRD005,Curved Monitor 27-inch,Electronics,180.0,280.0,12,2016-01-01
+PRD006,Wireless Ergonomic Mouse,Accessories,18.0,35.0,25,2016-01-01
+PRD007,Mechanical RGB Keyboard,Accessories,45.0,85.0,15,2016-01-01
+PRD008,USB-C Multi-Port Hub,Accessories,22.0,45.0,20,2016-01-01
+PRD009,USB-C Cable 2m,Accessories,4.0,15.0,30,2016-01-01
+PRD010,HD Webcam 1080p,Electronics,30.0,60.0,12,2016-01-01
+PRD011,Noise-Canceling Headphones,Audio,120.0,220.0,15,2018-03-01
+PRD012,Bluetooth Speaker Portable,Audio,35.0,75.0,20,2018-03-01
+PRD013,True Wireless Earbuds,Audio,50.0,110.0,25,2018-03-01
+PRD014,Studio Condenser Mic,Audio,70.0,130.0,8,2018-03-01
+PRD015,Soundbar with Subwoofer,Audio,110.0,210.0,10,2018-03-01
+PRD016,Flagship Smartphone 128GB,Mobile,600.0,899.0,10,2018-09-01
+PRD017,Budget Smartphone 64GB,Mobile,180.0,299.0,15,2018-09-01
+PRD018,Tablet 10-inch 64GB,Mobile,220.0,349.0,12,2018-09-01
+PRD019,Smart Fitness Watch,Mobile,85.0,149.0,15,2018-09-01
+PRD020,Smart Watch Replacement Band,Mobile,5.0,25.0,20,2018-09-01
+PRD021,Robotic Vacuum Cleaner,Home Appliances,180.0,320.0,8,2020-02-01
+PRD022,Air Purifier HEPA,Home Appliances,90.0,160.0,10,2020-02-01
+PRD023,Compact Espresso Machine,Home Appliances,110.0,199.0,6,2020-02-01
+PRD024,Smart LED Desk Lamp,Home Appliances,20.0,45.0,15,2020-02-01
+PRD025,Electric Kettle 1.7L,Home Appliances,15.0,35.0,12,2020-02-01
+PRD026,Portable SSD 1TB,Office,60.0,105.0,15,2020-06-01
+PRD027,External Hard Drive 4TB,Office,70.0,115.0,10,2020-06-01
+PRD028,Ergonomic Office Chair,Office,140.0,260.0,5,2020-06-01
+PRD029,Motorized Standing Desk,Office,250.0,450.0,4,2020-06-01
+PRD030,Wireless Document Scanner,Office,130.0,220.0,5,2020-06-01
+PRD031,Next-Gen Gaming Console,Gaming,400.0,499.0,8,2022-01-15
+PRD032,Retro Gaming Controller,Gaming,25.0,55.0,15,2022-01-15
+PRD033,Gaming Headset 7.1 Surround,Gaming,45.0,89.0,12,2022-01-15
+PRD034,VR Headset 128GB,Gaming,290.0,399.0,6,2022-01-15
+PRD035,Racing Wheel Controller,Gaming,150.0,270.0,4,2022-01-15
+PRD036,Wireless Charging Pad,Accessories,10.0,25.0,20,2022-05-01
+PRD037,Laptop Backpack Water Resistant,Accessories,25.0,59.0,15,2022-05-01
+PRD038,Surge Protector 8-Outlet,Electronics,12.0,29.0,25,2022-05-01
+PRD039,Stylus Pen Universal,Accessories,15.0,39.0,10,2022-05-01
+PRD040,Legacy Media Adapter,Electronics,8.0,19.0,10,2016-01-01

@@ -139,7 +139,7 @@ def get_category_performance(store_id: Optional[str] = None) -> List[Dict[str, A
     return query_all(query, params)
 
 def get_daily_sales_trend(days: int = 30, store_id: Optional[str] = None, target_date: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Returns aggregate daily revenue and volume for the N days relative to target_date (or max date)."""
+    """Returns aggregate daily/monthly revenue and volume for the N days relative to target_date (or max date)."""
     where_parts = []
     params = []
     
@@ -156,15 +156,21 @@ def get_daily_sales_trend(days: int = 30, store_id: Optional[str] = None, target
 
     where_clause = " WHERE " + " AND ".join(where_parts) if where_parts else ""
 
+    # Aggregation mode: daily for <= 90 days, monthly for > 90 days
+    if days > 90:
+        group_expr = "strftime('%Y-%m', s.date)"
+    else:
+        group_expr = "s.date"
+
     query = f"""
     SELECT 
-        s.date,
+        {group_expr} as date,
         SUM(s.quantity) as total_units,
         ROUND(SUM(s.total_revenue), 2) as total_revenue
     FROM sales s
     {where_clause}
-    GROUP BY s.date
-    ORDER BY s.date ASC
+    GROUP BY {group_expr}
+    ORDER BY {group_expr} ASC
     """
     return query_all(query, tuple(params))
 
@@ -387,5 +393,132 @@ def compare_stores_analytics(store_ids: List[str], time_days: int = 30, target_d
             "subtitle": "Daily revenue trajectory side-by-side",
             "labels": master_dates,
             "datasets": datasets_trend
+        }
+    }
+
+def get_yearly_performance(store_id: Optional[str] = "all") -> Dict[str, Any]:
+    """
+    Computes 10-year yearly sales performance breakdown, YoY growth %, and highlights.
+    """
+    where_parts = []
+    params = []
+    if store_id and store_id != "all":
+        where_parts.append("store_id = ?")
+        params.append(store_id)
+
+    where_clause = " WHERE " + " AND ".join(where_parts) if where_parts else ""
+
+    sql = f"""
+        SELECT 
+            strftime('%Y', date) as year,
+            COALESCE(SUM(quantity), 0) as total_units,
+            ROUND(COALESCE(SUM(total_revenue), 0), 2) as total_revenue,
+            COUNT(DISTINCT sale_id) as transaction_count
+        FROM sales
+        {where_clause}
+        GROUP BY strftime('%Y', date)
+        ORDER BY year ASC
+    """
+    rows = query_all(sql, tuple(params))
+    if not rows:
+        return {"years": [], "best_year": "N/A", "fastest_growth_year": "N/A", "lowest_year": "N/A"}
+
+    yearly_data = []
+    prev_rev = None
+    prev_units = None
+
+    for r in rows:
+        rev = r["total_revenue"]
+        units = r["total_units"]
+        
+        yoy_rev_pct = round(((rev - prev_rev) / prev_rev) * 100, 1) if prev_rev and prev_rev > 0 else 0.0
+        yoy_units_pct = round(((units - prev_units) / prev_units) * 100, 1) if prev_units and prev_units > 0 else 0.0
+
+        r["yoy_revenue_growth"] = yoy_rev_pct
+        r["yoy_units_growth"] = yoy_units_pct
+        yearly_data.append(r)
+
+        prev_rev = rev
+        prev_units = units
+
+    best_year = max(yearly_data, key=lambda x: x["total_revenue"])["year"]
+    lowest_year = min(yearly_data, key=lambda x: x["total_revenue"])["year"]
+    fastest_growth = max(yearly_data[1:], key=lambda x: x["yoy_revenue_growth"])["year"] if len(yearly_data) > 1 else best_year
+
+    years = [y["year"] for y in yearly_data]
+    revs = [y["total_revenue"] for y in yearly_data]
+    growth_rates = [y["yoy_revenue_growth"] for y in yearly_data]
+
+    return {
+        "yearly_table": yearly_data,
+        "best_year": best_year,
+        "fastest_growth_year": fastest_growth,
+        "lowest_year": lowest_year,
+        "yearly_chart": {
+            "type": "bar",
+            "title": "10-Year Revenue by Year (2016 - 2026)",
+            "labels": years,
+            "datasets": [{"label": "Annual Revenue ($)", "data": revs, "color": "#087F80"}]
+        },
+        "growth_chart": {
+            "type": "line",
+            "title": "YoY Revenue Growth Rate (%)",
+            "labels": years,
+            "datasets": [{"label": "YoY Growth (%)", "data": growth_rates, "color": "#2563EB"}]
+        }
+    }
+
+def get_seasonality_analysis(store_id: Optional[str] = "all") -> Dict[str, Any]:
+    """
+    Computes average monthly revenue and units across all 10 years to identify seasonal demand spikes.
+    """
+    where_parts = []
+    params = []
+    if store_id and store_id != "all":
+        where_parts.append("store_id = ?")
+        params.append(store_id)
+
+    where_clause = " WHERE " + " AND ".join(where_parts) if where_parts else ""
+
+    sql = f"""
+        SELECT 
+            month as month_num,
+            ROUND(AVG(monthly_rev), 2) as avg_revenue,
+            ROUND(AVG(monthly_units), 1) as avg_units
+        FROM (
+            SELECT 
+                strftime('%Y-%m', date) as year_month,
+                strftime('%m', date) as month,
+                SUM(total_revenue) as monthly_rev,
+                SUM(quantity) as monthly_units
+            FROM sales
+            {where_clause}
+            GROUP BY year_month, month
+        )
+        GROUP BY month_num
+        ORDER BY month_num ASC
+    """
+    rows = query_all(sql, tuple(params))
+    
+    month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    labels = []
+    avg_revs = []
+
+    for r in rows:
+        m_idx = int(r["month_num"]) - 1
+        m_name = month_names[m_idx] if 0 <= m_idx < 12 else r["month_num"]
+        r["month_name"] = m_name
+        labels.append(m_name)
+        avg_revs.append(r["avg_revenue"])
+
+    return {
+        "seasonality_table": rows,
+        "peak_month": max(rows, key=lambda x: x["avg_revenue"])["month_name"] if rows else "Dec",
+        "seasonality_chart": {
+            "type": "bar",
+            "title": "Monthly Demand Seasonality Profile (Jan - Dec)",
+            "subtitle": "Average monthly revenue across 10 years",
+            "labels": labels,
+            "datasets": [{"label": "Avg Monthly Revenue ($)", "data": avg_revs, "color": "#D97706"}]
         }
     }
