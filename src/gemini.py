@@ -89,35 +89,36 @@ SUPPLIED DETERMINISTIC RECOMMENDATIONS:
 Remember: Respond ONLY with valid JSON following the schema. Ground every statement in supplied numbers. If data sufficiency is 'insufficient', state clearly that external cause data is unavailable.
 """
 
-    # Attempt to call Gemini via google-genai or google-generativeai
+    # Attempt to call Gemini via google-genai SDK
     try:
-        try:
-            # Try new google-genai SDK first
-            from google import genai
-            client = genai.Client(api_key=api_key)
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',  # standard flash model or fallback to 1.5-flash / 3.5-flash-lite
-                contents=prompt_content,
-                config={
-                    'system_instruction': SYSTEM_PROMPT,
-                    'temperature': 0.1,
-                    'response_mime_type': 'application/json'
-                }
-            )
-            raw_text = response.text
-        except Exception as genai_err:
-            logger.warning(f"google-genai SDK call failed or model unavailable ({genai_err}), trying google.generativeai...")
-            import google.generativeai as genai_legacy
-            genai_legacy.configure(api_key=api_key)
-            model = genai_legacy.GenerativeModel(
-                model_name="gemini-1.5-flash",
-                system_instruction=SYSTEM_PROMPT
-            )
-            response = model.generate_content(
-                prompt_content,
-                generation_config={"temperature": 0.1, "response_mime_type": "application/json"}
-            )
-            raw_text = response.text
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        
+        # Try primary flash model, with fallbacks for lite model
+        model_names = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-3.5-flash-lite']
+        raw_text = None
+        last_err = None
+
+        for model_name in model_names:
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt_content,
+                    config={
+                        'system_instruction': SYSTEM_PROMPT,
+                        'temperature': 0.1,
+                        'response_mime_type': 'application/json'
+                    }
+                )
+                raw_text = response.text
+                if raw_text:
+                    break
+            except Exception as m_err:
+                last_err = m_err
+                continue
+
+        if not raw_text:
+            raise Exception(f"All Gemini model attempts failed. Last error: {last_err}")
 
         # Parse JSON output
         parsed_json = clean_and_parse_json(raw_text)
