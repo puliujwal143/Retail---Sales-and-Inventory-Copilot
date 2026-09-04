@@ -11,30 +11,27 @@
 </head>
 <body class="light-theme">
     <div class="app-layout">
-        <!-- Enterprise Left Sidebar -->
+        <!-- Sidebar Navigation (Exact Reference Match) -->
         <aside class="sidebar">
             <div class="brand">
                 <div class="logo-mark">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0F766E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
-                        <polyline points="2 17 12 22 22 17"></polyline>
-                        <polyline points="2 12 12 17 22 12"></polyline>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#087F80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="20" x2="18" y2="10"></line>
+                        <line x1="12" y1="20" x2="12" y2="4"></line>
+                        <line x1="6" y1="20" x2="6" y2="14"></line>
                     </svg>
                 </div>
                 <div class="brand-text">
                     <div class="brand-title">RetailIQ</div>
-                    <div class="brand-subtitle">Retail Intelligence Platform</div>
+                    <div class="brand-subtitle">Retail Intelligence</div>
                 </div>
             </div>
 
             <nav class="nav-menu">
-                <div class="nav-section-label">OVERVIEW</div>
                 <button class="nav-item active" data-tab="dashboard">
                     <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
                     <span>Dashboard</span>
                 </button>
-
-                <div class="nav-section-label" style="margin-top: 24px;">OPERATIONS</div>
                 <button class="nav-item" data-tab="inventory">
                     <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
                     <span>Inventory</span>
@@ -43,37 +40,58 @@
                     <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
                     <span>Sales Analytics</span>
                 </button>
-
-                <div class="nav-section-label" style="margin-top: 24px;">INTELLIGENCE</div>
                 <button class="nav-item" data-tab="copilot">
-                    <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10H12V2z"></path><path d="M12 12L2.1 10a10.05 10.05 0 0 1 9.9-8v10z"></path></svg>
+                    <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
                     <span>AI Copilot</span>
+                </button>
+
+                <div class="nav-section-label">INSIGHTS</div>
+                <button class="nav-item quick-jump" data-tab="inventory" data-status="CRITICAL">
+                    <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                    <span>Stock Alerts</span>
+                </button>
+                <button class="nav-item quick-jump" data-tab="sales">
+                    <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+                    <span>Sales Trends</span>
+                </button>
+                <button class="nav-item quick-jump" data-tab="dashboard">
+                    <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+                    <span>Store Performance</span>
+                </button>
+                <button class="nav-item quick-jump" data-tab="sales">
+                    <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                    <span>Reports</span>
                 </button>
             </nav>
 
             <div class="sidebar-footer">
-                <div class="ai-status-card">
-                    <div class="status-indicator">
-                        <span class="status-dot green-pulse"></span>
-                        <span class="status-text">Gemini Intelligence Online</span>
-                    </div>
-                    <div class="engine-tag">Deterministic Evidence Engine</div>
+                <!-- Promo Card -->
+                <div class="sidebar-promo-card">
+                    <div class="promo-icon">✦</div>
+                    <div class="promo-title">AI-Powered Retail Decisions</div>
+                    <div class="promo-desc">Turn your data into growth.</div>
                 </div>
+                <!-- Status Pill -->
+                <button class="sidebar-status-pill" id="sidebar-copilot-trigger">
+                    <div class="status-pill-left">
+                        <span class="status-dot green-pulse"></span>
+                        <div>
+                            <div class="status-pill-title">Gemini Online</div>
+                            <div class="status-pill-sub">AI ready to assist</div>
+                        </div>
+                    </div>
+                    <span class="status-pill-arrow">›</span>
+                </button>
             </div>
         </aside>
 
         <!-- Main Workspace Area -->
         <main class="main-content">
-            <!-- Top Header Bar -->
+            <!-- Top Header Bar (Exact Reference Match) -->
             <header class="top-header">
-                <div class="header-left">
-                    <button id="sidebar-toggle-btn" class="btn-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-                    </button>
-                    <div class="page-title">
-                        <h1 id="current-tab-title">Dashboard</h1>
-                        <p id="current-tab-subtitle">Retail performance overview across all store locations</p>
-                    </div>
+                <div class="search-input-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="global-search-input" placeholder="Search products, categories, stores..." class="form-input search-input">
                 </div>
                 <div class="header-right">
                     <div class="store-selector-wrapper">
@@ -81,156 +99,271 @@
                             <option value="all">All Stores (5)</option>
                         </select>
                     </div>
-                    <div class="header-action-icon" title="Notifications">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                    <div class="header-notification-btn" title="Notifications">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                        <span class="notification-badge-count">3</span>
                     </div>
                     <div class="user-profile-badge">
-                        <div class="avatar-circle">M</div>
-                        <span class="user-name">Manager</span>
+                        <div class="avatar-circle">SM</div>
+                        <span class="user-name">Store Manager</span>
+                        <span class="dropdown-arrow">▾</span>
                     </div>
                 </div>
             </header>
 
-            <!-- TAB 1: EXECUTIVE DASHBOARD -->
+            <!-- TAB 1: EXECUTIVE DASHBOARD (Reference Exact Grid) -->
             <section id="tab-dashboard" class="tab-view active">
                 <!-- Hero Greeting Banner -->
                 <div class="hero-banner">
-                    <div class="hero-text">
-                        <h2>Good morning, Manager</h2>
-                        <p>Here’s what needs your operational attention across your retail operation today.</p>
+                    <div class="hero-left">
+                        <div class="sun-icon">☀️</div>
+                        <div>
+                            <h2>Good morning, Manager</h2>
+                            <p>Here's what's happening across your retail operation today.</p>
+                        </div>
                     </div>
-                    <div class="hero-status">
-                        <span class="badge badge-success">System Active</span>
+                    <div class="hero-right">
+                        <div class="date-card">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                            <div>
+                                <div style="font-weight: 600; color: #14213D;">Mon, Aug 26, 2024</div>
+                                <div style="font-size: 10px; color: #94A3B8;">Last updated: 10:24 AM</div>
+                            </div>
+                        </div>
+                        <div class="quote-card">
+                            <span class="quote-mark">“</span> Data turns everyday decisions into extraordinary results. — RetailIQ
+                        </div>
                     </div>
                 </div>
 
-                <!-- KPI Cards Row -->
+                <!-- 5 KPI Cards Row with Sparklines -->
                 <div class="kpi-grid">
                     <div class="kpi-card">
-                        <div class="kpi-header">
-                            <span class="kpi-title">TOTAL REVENUE</span>
+                        <div class="kpi-top">
+                            <div class="kpi-icon-box bg-green">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2.5"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                            </div>
+                            <span class="kpi-title">Total Revenue</span>
                         </div>
-                        <div class="kpi-value" id="kpi-revenue">$0.00</div>
-                        <div class="kpi-trend trend-positive">↑ 12.4% vs previous period</div>
+                        <div class="kpi-body">
+                            <div class="kpi-left">
+                                <div class="kpi-value" id="kpi-revenue">$418,800</div>
+                                <div class="kpi-trend trend-positive">↑ 12.4% <span class="trend-sub">vs previous period</span></div>
+                            </div>
+                            <div class="kpi-sparkline" id="sparkline-revenue"></div>
+                        </div>
                     </div>
 
                     <div class="kpi-card">
-                        <div class="kpi-header">
-                            <span class="kpi-title">UNITS SOLD</span>
+                        <div class="kpi-top">
+                            <div class="kpi-icon-box bg-purple">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                            </div>
+                            <span class="kpi-title">Units Sold</span>
                         </div>
-                        <div class="kpi-value" id="kpi-units">0</div>
-                        <div class="kpi-trend trend-positive">↑ 8.2% demand volume</div>
+                        <div class="kpi-body">
+                            <div class="kpi-left">
+                                <div class="kpi-value" id="kpi-units">12,430</div>
+                                <div class="kpi-trend trend-positive">↑ 8.2% <span class="trend-sub">vs previous period</span></div>
+                            </div>
+                            <div class="kpi-sparkline" id="sparkline-units"></div>
+                        </div>
                     </div>
 
                     <div class="kpi-card">
-                        <div class="kpi-header">
-                            <span class="kpi-title">INVENTORY VALUATION</span>
+                        <div class="kpi-top">
+                            <div class="kpi-icon-box bg-orange">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                            </div>
+                            <span class="kpi-title">Low Stock Items</span>
                         </div>
-                        <div class="kpi-value" id="kpi-valuation">$0.00</div>
-                        <div class="kpi-subtext" id="kpi-inv-units">0 Total Units in Stock</div>
-                    </div>
-
-                    <div class="kpi-card highlight-warning">
-                        <div class="kpi-header">
-                            <span class="kpi-title">LOW STOCK SKUs</span>
+                        <div class="kpi-body">
+                            <div class="kpi-left">
+                                <div class="kpi-value" id="kpi-alerts-count">18</div>
+                                <div class="kpi-trend trend-negative">↑ 28% <span class="trend-sub">need attention</span></div>
+                            </div>
+                            <div class="kpi-sparkline" id="sparkline-lowstock"></div>
                         </div>
-                        <div class="kpi-value" id="kpi-alerts-count">0</div>
-                        <div class="kpi-subtext" id="kpi-alerts-breakdown">Critical: 0 | Warning: 0</div>
                     </div>
 
                     <div class="kpi-card">
-                        <div class="kpi-header">
-                            <span class="kpi-title">OVERSTOCK SKUs</span>
+                        <div class="kpi-top">
+                            <div class="kpi-icon-box bg-blue">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2.5"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+                            </div>
+                            <span class="kpi-title">Overstock Items</span>
                         </div>
-                        <div class="kpi-value" id="kpi-overstock-count">0</div>
-                        <div class="kpi-subtext">Potential capital lock</div>
+                        <div class="kpi-body">
+                            <div class="kpi-left">
+                                <div class="kpi-value" id="kpi-overstock-count">12</div>
+                                <div class="kpi-trend trend-positive">↓ 15% <span class="trend-sub">potential capital lock</span></div>
+                            </div>
+                            <div class="kpi-sparkline" id="sparkline-overstock"></div>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-top">
+                            <div class="kpi-icon-box bg-green">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2.5"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+                            </div>
+                            <span class="kpi-title">Sales Growth</span>
+                        </div>
+                        <div class="kpi-body">
+                            <div class="kpi-left">
+                                <div class="kpi-value" id="kpi-growth-rate">+21.6%</div>
+                                <div class="kpi-trend trend-positive"><span class="trend-sub">vs last month</span></div>
+                            </div>
+                            <div class="kpi-sparkline" id="sparkline-growth"></div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Dashboard Analytics BI Grid -->
-                <div class="dashboard-grid">
-                    <!-- Revenue & Demand Trend Chart -->
+                <!-- Main 3-Column Dashboard Grid -->
+                <div class="dashboard-main-grid">
+                    <!-- Column 1: Revenue & Sales Trend Chart -->
                     <div class="panel chart-panel">
                         <div class="panel-header">
                             <div>
-                                <h3>Revenue & Demand Trend</h3>
-                                <span class="subtitle">Daily revenue movement over time</span>
+                                <div class="title-with-icon">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#087F80" stroke-width="2.5"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                                    <h3>Revenue & Sales Trend</h3>
+                                </div>
+                                <span class="subtitle">Daily revenue and units sold over time</span>
                             </div>
                             <div class="time-range-picker">
                                 <button class="range-btn" data-days="7">7D</button>
                                 <button class="range-btn active" data-days="30">30D</button>
                                 <button class="range-btn" data-days="90">90D</button>
+                                <button class="range-btn" data-days="180">6M</button>
                             </div>
                         </div>
-                        <div id="dashboard-sales-chart" class="svg-chart-container">
-                            <!-- Rendered by app.js -->
+                        <div id="dashboard-sales-chart" class="svg-chart-container" style="height: 230px;">
+                            <!-- Dual Line + Bar SVG Chart rendered by app.js -->
+                        </div>
+                        <div class="chart-legend-footer">
+                            <span class="legend-item"><span class="legend-box" style="background:#087F80;"></span> Revenue ($)</span>
+                            <span class="legend-item"><span class="legend-box" style="background:#93C5FD;"></span> Units Sold</span>
                         </div>
                     </div>
 
-                    <!-- Inventory Health Composition -->
+                    <!-- Column 2: Inventory Health Donut Chart -->
                     <div class="panel">
                         <div class="panel-header">
-                            <h3>Inventory Health</h3>
-                            <span class="subtitle">Stock level breakdown</span>
+                            <div>
+                                <div class="title-with-icon">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#087F80" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                                    <h3>Inventory Health</h3>
+                                </div>
+                                <span class="subtitle">Product distribution by status</span>
+                            </div>
                         </div>
-                        <div id="inventory-health-container" class="health-breakdown-wrapper">
-                            <!-- Rendered by app.js -->
+                        <div id="inventory-donut-container" class="donut-chart-layout">
+                            <!-- Donut SVG + Legend rendered by app.js -->
+                        </div>
+                    </div>
+
+                    <!-- Column 3: Needs Attention List -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="title-with-icon">
+                                <span style="color:#EF4444; font-weight:700;">⚠️</span>
+                                <h3>Needs Attention</h3>
+                            </div>
+                            <button class="panel-link-btn" data-tab="inventory">View All →</button>
+                        </div>
+                        <div id="attention-items-container" class="compact-alerts-list">
+                            <!-- Compact alert items rendered by app.js -->
                         </div>
                     </div>
                 </div>
 
-                <!-- Priority Actions / Alerts Section -->
-                <div class="panel attention-panel">
-                    <div class="panel-header">
-                        <h3>Priority Actions Required</h3>
-                        <span class="subtitle">Ranked critical stock-outs, slow-moving items, and sales anomalies</span>
+                <!-- Bottom 3-Column Dashboard Grid -->
+                <div class="dashboard-bottom-grid">
+                    <!-- Column 1: Top Performing Products -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="title-with-icon">
+                                <span style="color:#F59E0B; font-weight:700;">🏆</span>
+                                <h3>Top Performing Products</h3>
+                            </div>
+                            <button class="panel-link-btn" data-tab="sales">View All →</button>
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 30px;">#</th>
+                                        <th>PRODUCT</th>
+                                        <th class="text-right">UNITS SOLD</th>
+                                        <th class="text-right">REVENUE</th>
+                                        <th class="text-right">GROWTH</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="top-products-tbody">
+                                    <!-- Rendered by app.js -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                    <div id="attention-items-container" class="attention-grid">
-                        <div class="loading-spinner">Loading priority actions...</div>
-                    </div>
-                </div>
 
-                <!-- Top Performing Products Table -->
-                <div class="panel">
-                    <div class="panel-header">
-                        <h3>Top Performing Products</h3>
+                    <!-- Column 2: Store Performance -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="title-with-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#087F80" stroke-width="2.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+                                <h3>Store Performance</h3>
+                            </div>
+                            <button class="panel-link-btn" data-tab="sales">View All →</button>
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>STORE</th>
+                                        <th class="text-right">REVENUE</th>
+                                        <th class="text-right">UNITS SOLD</th>
+                                        <th class="text-right">GROWTH</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="store-performance-tbody">
+                                    <!-- Rendered by app.js -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                    <div class="table-wrapper">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Rank</th>
-                                    <th>Product</th>
-                                    <th>Category</th>
-                                    <th class="text-right">Units Sold</th>
-                                    <th class="text-right">Revenue</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody id="top-products-tbody">
-                                <!-- Rendered by app.js -->
-                            </tbody>
-                        </table>
+
+                    <!-- Column 3: AI Insight Card -->
+                    <div class="panel ai-insight-card-wrapper">
+                        <div class="ai-insight-top">
+                            <div class="ai-insight-title">
+                                <span class="bulb-icon">💡</span> AI Insight
+                            </div>
+                        </div>
+                        <div class="ai-insight-body" id="dashboard-ai-insight-text">
+                            Laptop sales have increased by 211.6% compared to the previous month, making it the top-performing product across all store locations.
+                        </div>
+                        <button class="btn-ask-copilot" data-tab="copilot" data-prompt="How did laptop sales perform?">
+                            Ask the AI Copilot →
+                        </button>
                     </div>
                 </div>
             </section>
 
             <!-- TAB 2: INVENTORY INTELLIGENCE -->
             <section id="tab-inventory" class="tab-view">
-                <!-- Status Summary KPI Row -->
-                <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));">
-                    <div class="kpi-card"><div class="kpi-header"><span class="kpi-title">TOTAL PRODUCTS</span></div><div class="kpi-value" id="inv-kpi-total">0</div></div>
+                <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-bottom:16px;">
+                    <div class="kpi-card"><div class="kpi-header"><span class="kpi-title">TOTAL SKUs</span></div><div class="kpi-value" id="inv-kpi-total">0</div></div>
                     <div class="kpi-card highlight-critical"><div class="kpi-header"><span class="kpi-title">CRITICAL (<= 2D)</span></div><div class="kpi-value" id="inv-kpi-critical">0</div></div>
                     <div class="kpi-card highlight-warning"><div class="kpi-header"><span class="kpi-title">WARNING (<= 7D)</span></div><div class="kpi-value" id="inv-kpi-warning">0</div></div>
                     <div class="kpi-card"><div class="kpi-header"><span class="kpi-title">OVERSTOCK (> 30D)</span></div><div class="kpi-value" id="inv-kpi-overstock">0</div></div>
                     <div class="kpi-card"><div class="kpi-header"><span class="kpi-title">SLOW MOVING</span></div><div class="kpi-value" id="inv-kpi-slow">0</div></div>
                 </div>
 
-                <!-- Filter Toolbar -->
                 <div class="filter-toolbar">
                     <div class="search-box">
-                        <span class="search-icon">⌕</span>
-                        <input type="text" id="inv-search-input" placeholder="Search products, stores, categories..." class="form-input search-input">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="inv-search-input" placeholder="Search products, categories, stores..." class="form-input search-input">
                     </div>
                     <div class="filter-group">
                         <select id="inv-filter-category" class="form-select">
@@ -247,20 +380,19 @@
                     </div>
                 </div>
 
-                <!-- Enterprise Data Table -->
                 <div class="panel">
                     <div class="table-wrapper">
                         <table class="data-table clickable-table">
                             <thead>
                                 <tr>
-                                    <th>Product</th>
-                                    <th>Category</th>
-                                    <th>Store</th>
-                                    <th class="text-right">Stock</th>
-                                    <th class="text-right">Avg Daily Sales</th>
-                                    <th class="text-right">Days Remaining</th>
-                                    <th>Status</th>
-                                    <th class="text-right">Recommended Reorder</th>
+                                    <th>PRODUCT</th>
+                                    <th>CATEGORY</th>
+                                    <th>STORE</th>
+                                    <th class="text-right">STOCK</th>
+                                    <th class="text-right">AVG DAILY SALES</th>
+                                    <th class="text-right">DAYS REMAINING</th>
+                                    <th>STATUS</th>
+                                    <th class="text-right">RECOMMENDED REORDER</th>
                                 </tr>
                             </thead>
                             <tbody id="inventory-tbody">
@@ -273,7 +405,6 @@
 
             <!-- TAB 3: SALES ANALYTICS WORKSPACE -->
             <section id="tab-sales" class="tab-view">
-                <!-- Filter Toolbar -->
                 <div class="filter-toolbar">
                     <div class="filter-group">
                         <label for="sales-timeframe-select">Date Window:</label>
@@ -291,115 +422,49 @@
                     </div>
                 </div>
 
-                <!-- Horizontal KPI Row -->
                 <div class="kpi-grid">
-                    <div class="kpi-card">
-                        <div class="kpi-header"><span class="kpi-title">TOTAL REVENUE</span></div>
-                        <div class="kpi-value" id="sales-kpi-revenue">$0.00</div>
-                        <div class="kpi-subtext">Selected date window</div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-header"><span class="kpi-title">UNITS SOLD</span></div>
-                        <div class="kpi-value" id="sales-kpi-units">0</div>
-                        <div class="kpi-subtext">Total volume</div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-header"><span class="kpi-title">AVG DAILY REVENUE</span></div>
-                        <div class="kpi-value" id="sales-kpi-daily-rev">$0.00</div>
-                        <div class="kpi-subtext">Average per day</div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-header"><span class="kpi-title">TOP CATEGORY</span></div>
-                        <div class="kpi-value" id="sales-kpi-top-cat">-</div>
-                        <div class="kpi-subtext">Highest revenue category</div>
-                    </div>
+                    <div class="kpi-card"><div class="kpi-header"><span class="kpi-title">TOTAL REVENUE</span></div><div class="kpi-value" id="sales-kpi-revenue">$0.00</div></div>
+                    <div class="kpi-card"><div class="kpi-header"><span class="kpi-title">UNITS SOLD</span></div><div class="kpi-value" id="sales-kpi-units">0</div></div>
+                    <div class="kpi-card"><div class="kpi-header"><span class="kpi-title">AVG DAILY REVENUE</span></div><div class="kpi-value" id="sales-kpi-daily-rev">$0.00</div></div>
+                    <div class="kpi-card"><div class="kpi-header"><span class="kpi-title">TOP CATEGORY</span></div><div class="kpi-value" id="sales-kpi-top-cat">-</div></div>
                 </div>
 
-                <!-- Varied BI Charts Layout -->
                 <div class="charts-workspace-grid">
-                    <!-- CHART 1: Revenue Trend (2/3 width) -->
                     <div class="panel chart-span-2">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Revenue Trend</h3>
-                                <span class="subtitle">Revenue movement over time</span>
-                            </div>
-                        </div>
+                        <div class="panel-header"><h3>Revenue Trend</h3><span class="subtitle">Revenue movement over time</span></div>
                         <div id="chart-sales-revenue" class="svg-chart-container"></div>
                     </div>
-
-                    <!-- CHART 2: Units Sold Trend -->
                     <div class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Units Sold Demand</h3>
-                                <span class="subtitle">Daily volume trajectory</span>
-                            </div>
-                        </div>
+                        <div class="panel-header"><h3>Units Sold Demand</h3><span class="subtitle">Daily volume trajectory</span></div>
                         <div id="chart-sales-units" class="svg-chart-container"></div>
                     </div>
-
-                    <!-- CHART 3: Revenue by Category -->
                     <div class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Revenue by Category</h3>
-                                <span class="subtitle">Category sales distribution</span>
-                            </div>
-                        </div>
+                        <div class="panel-header"><h3>Revenue by Category</h3><span class="subtitle">Category sales distribution</span></div>
                         <div id="chart-sales-category" class="svg-chart-container"></div>
                     </div>
-
-                    <!-- CHART 4: Top Products Horizontal Bar -->
                     <div class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Top Products by Revenue</h3>
-                                <span class="subtitle">Highest performing SKUs</span>
-                            </div>
-                        </div>
+                        <div class="panel-header"><h3>Top Products by Revenue</h3><span class="subtitle">Highest performing SKUs</span></div>
                         <div id="chart-sales-top-products" class="svg-chart-container"></div>
                     </div>
-
-                    <!-- CHART 5: Store Performance Comparison -->
                     <div class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Store Performance Comparison</h3>
-                                <span class="subtitle">Revenue by retail location</span>
-                            </div>
-                        </div>
+                        <div class="panel-header"><h3>Store Performance Comparison</h3><span class="subtitle">Revenue by retail location</span></div>
                         <div id="chart-sales-store" class="svg-chart-container"></div>
                     </div>
-
-                    <!-- CHART 6: Sales Anomalies Highlights -->
                     <div class="panel">
-                        <div class="panel-header">
-                            <div>
-                                <h3>Sales Spikes & Drops Highlights</h3>
-                                <span class="subtitle">Spikes (>= +30%) and Drops (<= -30%)</span>
-                            </div>
-                        </div>
+                        <div class="panel-header"><h3>Sales Spikes & Drops Highlights</h3><span class="subtitle">Spikes (>= +30%) and Drops (<= -30%)</span></div>
                         <div id="spikes-drops-container" class="trend-card-list"></div>
                     </div>
                 </div>
 
-                <!-- AI-Ready Deterministic Insights -->
                 <div class="panel">
-                    <div class="panel-header">
-                        <h3>AI-Ready Deterministic Sales Insights</h3>
-                        <span class="subtitle">Automated facts calculated from transaction history</span>
-                    </div>
-                    <div id="sales-insights-container" class="insights-list">
-                        <!-- Rendered by app.js -->
-                    </div>
+                    <div class="panel-header"><h3>AI-Ready Deterministic Sales Insights</h3></div>
+                    <div id="sales-insights-container" class="insights-list"></div>
                 </div>
             </section>
 
             <!-- TAB 4: AI COPILOT WORKSPACE -->
             <section id="tab-copilot" class="tab-view">
                 <div class="copilot-container">
-                    <!-- Clickable Suggestion Prompts Bar -->
                     <div class="preset-prompts-bar">
                         <span class="prompt-label">Suggested Questions:</span>
                         <button class="prompt-pill" data-prompt="What needs my attention today?">What needs my attention today?</button>
@@ -409,12 +474,10 @@
                         <button class="prompt-pill" data-prompt="Why did laptop sales increase?">Why did laptop sales increase?</button>
                     </div>
 
-                    <!-- Chat Messages Workspace -->
                     <div id="chat-messages-container" class="chat-messages">
-                        <!-- Centered Welcome Landing Area -->
                         <div id="copilot-welcome-card" class="copilot-welcome-card">
                             <div class="welcome-icon">
-                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0F766E" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#087F80" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
                             </div>
                             <h2>RetailIQ Copilot</h2>
                             <p>Ask natural language questions grounded strictly by SQLite analytics & Gemini explanation layer.</p>
@@ -440,7 +503,6 @@
                         </div>
                     </div>
 
-                    <!-- AI Multi-step Thinking Bar -->
                     <div id="ai-loading-indicator" class="ai-loading-card hidden">
                         <div class="spinner-ring"></div>
                         <div class="loading-steps">
@@ -448,7 +510,6 @@
                         </div>
                     </div>
 
-                    <!-- Chat Input Form -->
                     <form id="chat-form" class="chat-input-wrapper">
                         <input type="text" id="chat-input" placeholder="Ask RetailIQ a question..." autocomplete="off">
                         <button type="submit" id="chat-submit-btn" class="btn-primary">
@@ -471,46 +532,26 @@
                 <button id="modal-close-btn" class="modal-close-icon">✕</button>
             </div>
             <div class="modal-body">
-                <!-- Metrics Grid -->
                 <div class="modal-metrics-grid">
-                    <div class="modal-metric-box">
-                        <span class="m-label">CURRENT STOCK</span>
-                        <span id="modal-stock-val" class="m-val">0</span>
-                    </div>
-                    <div class="modal-metric-box">
-                        <span class="m-label">AVG DAILY SALES</span>
-                        <span id="modal-ads-val" class="m-val">0.0 / day</span>
-                    </div>
-                    <div class="modal-metric-box">
-                        <span class="m-label">DAYS REMAINING</span>
-                        <span id="modal-days-val" class="m-val">0</span>
-                    </div>
-                    <div class="modal-metric-box">
-                        <span class="m-label">30D REVENUE</span>
-                        <span id="modal-revenue-val" class="m-val">$0.00</span>
-                    </div>
+                    <div class="modal-metric-box"><span class="m-label">CURRENT STOCK</span><span id="modal-stock-val" class="m-val">0</span></div>
+                    <div class="modal-metric-box"><span class="m-label">AVG DAILY SALES</span><span id="modal-ads-val" class="m-val">0.0 / day</span></div>
+                    <div class="modal-metric-box"><span class="m-label">DAYS REMAINING</span><span id="modal-days-val" class="m-val">0</span></div>
+                    <div class="modal-metric-box"><span class="m-label">30D REVENUE</span><span id="modal-revenue-val" class="m-val">$0.00</span></div>
                 </div>
 
-                <!-- Product 30-Day Sales Curve -->
                 <div class="modal-section">
                     <h4>30-Day Product Sales Curve</h4>
                     <div id="modal-sales-chart" class="svg-chart-container" style="height: 160px;"></div>
                 </div>
 
-                <!-- Automated Reorder Callout -->
                 <div class="modal-section reorder-callout-box">
                     <h4>Automated Reorder Recommendation</h4>
-                    <div id="modal-reorder-summary" class="reorder-summary-text">
-                        Loading reorder calculation...
-                    </div>
+                    <div id="modal-reorder-summary" class="reorder-summary-text">Loading reorder calculation...</div>
                 </div>
 
-                <!-- Evidence Breakdown -->
                 <div class="modal-section evidence-box">
                     <h4>Supporting Evidence & Calculations</h4>
-                    <div id="modal-evidence-text" class="evidence-details">
-                        <!-- Rendered by app.js -->
-                    </div>
+                    <div id="modal-evidence-text" class="evidence-details"></div>
                 </div>
             </div>
         </div>
