@@ -159,7 +159,7 @@
                         </div>
                         <div class="kpi-body">
                             <div class="kpi-left">
-                                <div class="kpi-value" id="kpi-revenue">$418,800</div>
+                                <div class="kpi-value" id="kpi-revenue">₹418,800</div>
                                 <div class="kpi-trend trend-positive">↑ 12.4% <span class="trend-sub">vs previous period</span></div>
                             </div>
                             <div class="kpi-sparkline" id="sparkline-revenue"></div>
@@ -241,7 +241,7 @@
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#087F80" stroke-width="2.5"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
                                     <h3>Revenue & Sales Trend</h3>
                                 </div>
-                                <span class="subtitle">Daily revenue and units sold over time</span>
+                                <span class="subtitle" id="dashboard-chart-subtitle">Daily revenue and units sold over time</span>
                             </div>
                             <div class="time-range-picker">
                                 <button class="range-btn" data-days="7">7D</button>
@@ -254,8 +254,8 @@
                             <!-- Dual Line + Bar SVG Chart rendered by app.js -->
                         </div>
                         <div class="chart-legend-footer">
-                            <span class="legend-item"><span class="legend-box" style="background:#087F80;"></span> Revenue ($)</span>
-                            <span class="legend-item"><span class="legend-box" style="background:#93C5FD;"></span> Units Sold</span>
+                            <span class="legend-item"><span class="legend-box" style="background:#087F80;"></span> Revenue (₹) — Left Axis</span>
+                            <span class="legend-item"><span class="legend-box" style="background:#3B82F6;"></span> Units Sold — Right Axis</span>
                         </div>
                     </div>
 
@@ -440,9 +440,9 @@
                 </div>
 
                 <div class="kpi-grid">
-                    <div class="kpi-card"><div class="kpi-header"><span class="kpi-title">TOTAL REVENUE</span></div><div class="kpi-value" id="sales-kpi-revenue">$0.00</div></div>
+                    <div class="kpi-card"><div class="kpi-header"><span class="kpi-title">TOTAL REVENUE</span></div><div class="kpi-value" id="sales-kpi-revenue">₹0.00</div></div>
                     <div class="kpi-card"><div class="kpi-header"><span class="kpi-title">UNITS SOLD</span></div><div class="kpi-value" id="sales-kpi-units">0</div></div>
-                    <div class="kpi-card"><div class="kpi-header"><span class="kpi-title">AVG DAILY REVENUE</span></div><div class="kpi-value" id="sales-kpi-daily-rev">$0.00</div></div>
+                    <div class="kpi-card"><div class="kpi-header"><span class="kpi-title">AVG DAILY REVENUE</span></div><div class="kpi-value" id="sales-kpi-daily-rev">₹0.00</div></div>
                     <div class="kpi-card"><div class="kpi-header"><span class="kpi-title">TOP CATEGORY</span></div><div class="kpi-value" id="sales-kpi-top-cat">-</div></div>
                 </div>
 
@@ -649,7 +649,7 @@
                     <div class="modal-metric-box"><span class="m-label">CURRENT STOCK</span><span id="modal-stock-val" class="m-val">0</span></div>
                     <div class="modal-metric-box"><span class="m-label">AVG DAILY SALES</span><span id="modal-ads-val" class="m-val">0.0 / day</span></div>
                     <div class="modal-metric-box"><span class="m-label">DAYS REMAINING</span><span id="modal-days-val" class="m-val">0</span></div>
-                    <div class="modal-metric-box"><span class="m-label">30D REVENUE</span><span id="modal-revenue-val" class="m-val">$0.00</span></div>
+                    <div class="modal-metric-box"><span class="m-label">30D REVENUE</span><span id="modal-revenue-val" class="m-val">₹0.00</span></div>
                 </div>
 
                 <div class="modal-section">

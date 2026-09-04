@@ -41,7 +41,7 @@ def build_structured_evidence(analytics_result: Dict[str, Any], query_spec: Dict
     if not facts and raw_evidence:
         for item in raw_evidence[:4]:
             if isinstance(item, dict) and "revenue" in item and "units_sold" in item:
-                facts.append(f"{item.get('product_name', 'Item')}: ${item['revenue']:,.2f} ({item['units_sold']:,} units)")
+                facts.append(f"{item.get('product_name', 'Item')}: ₹{item['revenue']:,.2f} ({item['units_sold']:,} units)")
 
     # 2. OBSERVATIONS (Identified co-occurring patterns in dataset)
     if isinstance(raw_data, list) and len(raw_data) >= 2:
@@ -50,7 +50,7 @@ def build_structured_evidence(analytics_result: Dict[str, Any], query_spec: Dict
             rev_end = raw_data[-1]["revenue"]
             if isinstance(rev_start, (int, float)) and isinstance(rev_end, (int, float)) and rev_start > 0:
                 pct = ((rev_end - rev_start) / rev_start) * 100.0
-                observations.append(f"Revenue changed by {pct:+.1f}% from initial period (${rev_start:,.2f}) to final period (${rev_end:,.2f}).")
+                observations.append(f"Revenue changed by {pct:+.1f}% from initial period (₹{rev_start:,.2f}) to final period (₹{rev_end:,.2f}).")
         if len(raw_data) > 3:
             observations.append(f"Sales trajectory evaluated across {len(raw_data)} consecutive recording periods.")
 

@@ -5,8 +5,14 @@ Ensures charts, evidence, KPIs, and textual answers are generated from the EXACT
 """
 
 from typing import Dict, Any, List
+import numpy as np
+import pandas as pd
 from src.database import query_all, query_one
-from src.inventory_rules import TARGET_COVERAGE_DAYS, CRITICAL_DAYS_THRESHOLD, get_inventory_status_df
+from src.inventory_rules import (
+    TARGET_COVERAGE_DAYS, CRITICAL_DAYS_THRESHOLD, OVERSTOCK_DAYS_THRESHOLD,
+    INVENTORY_DEMAND_WINDOW_DAYS, get_inventory_status_df, get_recent_demand_period,
+    get_interstore_transfer_opportunities
+)
 from src.recommendation import get_attention_items
 
 def run_driver_analysis(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
@@ -184,15 +190,15 @@ def run_driver_analysis(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, 
     top_store = store_drivers[0] if store_drivers else None
 
     confirmed_facts = [
-        f"{entity_name} revenue {dir_str} {net_rev_pct:+.1f}% (${abs(net_rev_change):,.2f}) from {p_label} (${p_rev:,.2f}) to {c_label} (${c_rev:,.2f}).",
+        f"{entity_name} revenue {dir_str} {net_rev_pct:+.1f}% (₹{abs(net_rev_change):,.2f}) from {p_label} (₹{p_rev:,.2f}) to {c_label} (₹{c_rev:,.2f}).",
         f"Units sold changed by {net_units_pct:+.1f}% ({net_units_change:+} units) across the evaluated comparison window."
     ]
 
     observed_patterns = []
     if top_sku:
-        observed_patterns.append(f"'{top_sku['product_name']}' accounted for ${abs(top_sku['revenue_change']):,.2f} ({abs(top_sku['contrib_pct']):.1f}%) of the total {dir_word}.")
+        observed_patterns.append(f"'{top_sku['product_name']}' accounted for ₹{abs(top_sku['revenue_change']):,.2f} ({abs(top_sku['contrib_pct']):.1f}%) of the total {dir_word}.")
     if top_store:
-        observed_patterns.append(f"{top_store['store_name']} generated the largest store {dir_word} at ${abs(top_store['revenue_change']):,.2f} ({abs(top_store['contrib_pct']):.1f}% contribution).")
+        observed_patterns.append(f"{top_store['store_name']} generated the largest store {dir_word} at ₹{abs(top_store['revenue_change']):,.2f} ({abs(top_store['contrib_pct']):.1f}% contribution).")
 
     possible_drivers = [
         f"Sales volume coincided with an average stock level of {avg_stock:.0f} units across active locations."
@@ -203,7 +209,7 @@ def run_driver_analysis(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, 
         "External root causes cannot be established without inventing unverified facts."
     ]
 
-    lead_sku_str = f"'{top_sku['product_name']}' accounted for ${abs(top_sku['revenue_change']):,.2f} ({abs(top_sku['contrib_pct']):.1f}%) of the {dir_word}" if top_sku else f"revenue changed by {net_rev_pct:+.1f}%"
+    lead_sku_str = f"'{top_sku['product_name']}' accounted for ₹{abs(top_sku['revenue_change']):,.2f} ({abs(top_sku['contrib_pct']):.1f}%) of the {dir_word}" if top_sku else f"revenue changed by {net_rev_pct:+.1f}%"
     lead_store_str = f", with {top_store['store_name']} leading store {dir_word}." if top_store else "."
 
     context_summary = (
@@ -212,9 +218,9 @@ def run_driver_analysis(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, 
     )
 
     metrics = [
-        {"label": f"Revenue ({p_label} vs {c_label})", "value": f"${c_rev:,.2f} ({net_rev_pct:+.1f}%)"},
-        {"label": "Lead SKU Driver", "value": f"{top_sku['product_name'] if top_sku else 'N/A'} (${top_sku['revenue_change']:+,.2f})"},
-        {"label": "Lead Store Driver", "value": f"{top_store['store_name'] if top_store else 'N/A'} (${top_store['revenue_change']:+,.2f})"},
+        {"label": f"Revenue ({p_label} vs {c_label})", "value": f"₹{c_rev:,.2f} ({net_rev_pct:+.1f}%)"},
+        {"label": "Lead SKU Driver", "value": f"{top_sku['product_name'] if top_sku else 'N/A'} (₹{top_sku['revenue_change']:+,.2f})"},
+        {"label": "Lead Store Driver", "value": f"{top_store['store_name'] if top_store else 'N/A'} (₹{top_store['revenue_change']:+,.2f})"},
         {"label": "Current Stock Level", "value": f"{avg_stock:.0f} units avg"}
     ]
 
@@ -232,7 +238,7 @@ def run_driver_analysis(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, 
         "title": f"{entity_name} Revenue Contribution by SKU ({p_label} vs {c_label})",
         "labels": chart_labels,
         "datasets": [{
-            "label": "Revenue Change ($)",
+            "label": "Revenue Change (₹)",
             "data": chart_data_pts,
             "color": "#087F80" if is_increase else "#ef4444"
         }]
@@ -427,7 +433,7 @@ def run_sales_improvement_analysis(spec: Dict[str, Any], data_scope_str: str) ->
     if declining_skus:
         top_dec = declining_skus[0]
         recommendations.append(
-            f"Investigate sales decline for '{top_dec['product_name']}': revenue dropped by ${abs(top_dec['revenue_change']):,.2f} ({top_dec['pct_change']:.1f}%) from {p_label} to {c_label}."
+            f"Investigate sales decline for '{top_dec['product_name']}': revenue dropped by ₹{abs(top_dec['revenue_change']):,.2f} ({top_dec['pct_change']:.1f}%) from {p_label} to {c_label}."
         )
 
     if overstock_opps:
@@ -439,7 +445,7 @@ def run_sales_improvement_analysis(spec: Dict[str, Any], data_scope_str: str) ->
     if growth_skus:
         top_gr = growth_skus[0]
         recommendations.append(
-            f"Capitalize on growth momentum for lead SKU '{top_gr['product_name']}': generated ${top_gr['curr_revenue']:,.2f} ({top_gr['pct_change']:+.1f}% growth)."
+            f"Capitalize on growth momentum for lead SKU '{top_gr['product_name']}': generated ₹{top_gr['curr_revenue']:,.2f} ({top_gr['pct_change']:+.1f}% growth)."
         )
 
     if not recommendations:
@@ -450,19 +456,19 @@ def run_sales_improvement_analysis(spec: Dict[str, Any], data_scope_str: str) ->
     top_gr_name = growth_skus[0]["product_name"] if growth_skus else "N/A"
     top_dec_name = declining_skus[0]["product_name"] if declining_skus else "N/A"
 
-    gr_detail = f"Top growth opportunity: '{top_gr_name}' (${growth_skus[0]['revenue_change']:+,.2f}). " if growth_skus else ""
-    dec_detail = f"Key risk: '{top_dec_name}' (${declining_skus[0]['revenue_change']:+,.2f})." if declining_skus else ""
+    gr_detail = f"Top growth opportunity: '{top_gr_name}' (₹{growth_skus[0]['revenue_change']:+,.2f}). " if growth_skus else ""
+    dec_detail = f"Key risk: '{top_dec_name}' (₹{declining_skus[0]['revenue_change']:+,.2f})." if declining_skus else ""
 
     context_summary = (
         f"Sales Improvement Analysis for '{entity_name}' across {store_name} ({p_label} vs {c_label}): "
-        f"Total Revenue reached ${c_rev:,.2f} ({net_rev_pct:+.1f}% growth). "
+        f"Total Revenue reached ₹{c_rev:,.2f} ({net_rev_pct:+.1f}% growth). "
         f"{gr_detail}{dec_detail}".strip()
     )
 
     metrics = [
-        {"label": f"Revenue ({p_label} vs {c_label})", "value": f"${c_rev:,.2f} ({net_rev_pct:+.1f}%)"},
-        {"label": "Top Growth SKU", "value": f"{top_gr_name} (${growth_skus[0]['revenue_change']:+,.2f})" if growth_skus else "N/A"},
-        {"label": "Top Declining SKU", "value": f"{top_dec_name} (${declining_skus[0]['revenue_change']:+,.2f})" if declining_skus else "N/A"},
+        {"label": f"Revenue ({p_label} vs {c_label})", "value": f"₹{c_rev:,.2f} ({net_rev_pct:+.1f}%)"},
+        {"label": "Top Growth SKU", "value": f"{top_gr_name} (₹{growth_skus[0]['revenue_change']:+,.2f})" if growth_skus else "N/A"},
+        {"label": "Top Declining SKU", "value": f"{top_dec_name} (₹{declining_skus[0]['revenue_change']:+,.2f})" if declining_skus else "N/A"},
         {"label": "High-Demand Stock Risk", "value": f"{low_stock_opps[0]['product_name']} ({low_stock_opps[0]['days_remaining']:.1f}d left)" if low_stock_opps else "Healthy"}
     ]
 
@@ -475,7 +481,7 @@ def run_sales_improvement_analysis(spec: Dict[str, Any], data_scope_str: str) ->
         "title": f"Top SKU Revenue Opportunities & Risks ({p_label} vs {c_label})",
         "labels": chart_labels,
         "datasets": [{
-            "label": "Revenue Change ($)",
+            "label": "Revenue Change (₹)",
             "data": chart_values,
             "color": "#087F80"
         }]
@@ -492,15 +498,15 @@ def run_sales_improvement_analysis(spec: Dict[str, Any], data_scope_str: str) ->
         })
 
     confirmed_facts = [
-        f"{entity_name} revenue reached ${c_rev:,.2f} ({net_rev_pct:+.1f}%) in {c_label} compared to ${p_rev:,.2f} in {p_label}.",
+        f"{entity_name} revenue reached ₹{c_rev:,.2f} ({net_rev_pct:+.1f}%) in {c_label} compared to ₹{p_rev:,.2f} in {p_label}.",
         f"Analyzed {len(sku_diffs)} SKU trajectories across active store locations."
     ]
 
     observed_patterns = []
     if growth_skus:
-        observed_patterns.append(f"Lead growth SKU '{growth_skus[0]['product_name']}' gained +${growth_skus[0]['revenue_change']:,.2f} in revenue.")
+        observed_patterns.append(f"Lead growth SKU '{growth_skus[0]['product_name']}' gained +₹{growth_skus[0]['revenue_change']:,.2f} in revenue.")
     if declining_skus:
-        observed_patterns.append(f"Lead declining SKU '{declining_skus[0]['product_name']}' dropped ${abs(declining_skus[0]['revenue_change']):,.2f} in revenue.")
+        observed_patterns.append(f"Lead declining SKU '{declining_skus[0]['product_name']}' dropped ₹{abs(declining_skus[0]['revenue_change']):,.2f} in revenue.")
 
     possible_drivers = [
         f"Sales velocity coincided with inventory stock coverage thresholds across stores."
@@ -536,6 +542,272 @@ def run_sales_improvement_analysis(spec: Dict[str, Any], data_scope_str: str) ->
         },
         "chart_data": chart_spec
     }
+
+def run_overstock_analysis(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
+    store_filter = spec.get("store")
+    store_id = store_filter["store_id"] if store_filter else None
+    cat_filter = spec.get("category")
+
+    start_d, end_d, window_days = get_recent_demand_period()
+    inv_df = get_inventory_status_df(store_id=store_id, category=cat_filter)
+
+    demand_scope_info = f"Demand Basis: Last {window_days} days ({start_d} to {end_d}) • Overstock Threshold: >30 days"
+    full_data_scope = f"{data_scope_str} • {demand_scope_info}"
+
+    if inv_df.empty:
+        return {
+            "intent": "OVERSTOCK",
+            "data_scope": full_data_scope,
+            "data_sufficiency": "sufficient",
+            "context_summary": f"No products meet the overstock threshold of 30 days of inventory coverage based on recent {window_days}-day demand ({start_d} to {end_d}).",
+            "metrics": [
+                {"label": "Demand Basis", "value": f"Last {window_days} days ({start_d} to {end_d})"},
+                {"label": "Overstock Threshold", "value": ">30 days"},
+                {"label": "Overstocked Items", "value": "0 records"}
+            ],
+            "recommendations": ["Current inventory coverage is within target operating bounds across all locations."],
+            "evidence": [],
+            "chart_data": None
+        }
+
+    total_analyzed = len(inv_df)
+    no_data_df = inv_df[inv_df["status"].isin(["NO_RECENT_DEMAND", "NO_STOCK_DATA"])]
+    excluded_count = len(no_data_df)
+
+    over_df = inv_df[inv_df["status"] == "OVERSTOCK"].sort_values(by="days_remaining", ascending=False)
+
+    if over_df.empty:
+        summary_text = (
+            f"Evaluated {total_analyzed} product records based on {window_days}-day demand ({start_d} to {end_d}). Zero products meet the overstock threshold of 30 days of inventory coverage."
+        )
+        if excluded_count > 0:
+            summary_text += f" ({excluded_count} records were excluded because required inventory or recent demand data was unavailable)."
+
+        return {
+            "intent": "OVERSTOCK",
+            "data_scope": full_data_scope,
+            "data_sufficiency": "sufficient" if excluded_count == 0 else "partial",
+            "context_summary": summary_text,
+            "metrics": [
+                {"label": "Demand Basis", "value": f"Last {window_days} days ({start_d} to {end_d})"},
+                {"label": "Overstock Threshold", "value": ">30 days"},
+                {"label": "Overstocked Products", "value": "0 records"}
+            ],
+            "recommendations": ["Maintain current replenishment velocity across active SKUs."],
+            "evidence": [],
+            "chart_data": None
+        }
+
+    metrics = [
+        {"label": "Demand Basis", "value": f"Last {window_days} days ({start_d} to {end_d})"},
+        {"label": "Overstock Threshold", "value": ">30 days"},
+        {"label": "Overstocked Records", "value": f"{len(over_df)} product-store records"}
+    ]
+    recommendations = []
+    evidence = []
+    chart_labels = []
+    chart_days = []
+
+    display_limit = 10
+    top_over = over_df.head(display_limit)
+
+    for _, row in top_over.iterrows():
+        p_name = row["product_name"]
+        st_name = row["store_name"]
+        stock = int(row["current_stock"])
+        recent_sold = int(row["recent_units_sold"])
+        ads = float(row["average_daily_sales"])
+        days = float(row["days_remaining"])
+        days_rounded = int(round(days))
+
+        metrics.append({
+            "label": f"{p_name} ({st_name})",
+            "value": f"Stock: {stock} | Recent 90d: {recent_sold} | Coverage: {days_rounded} days"
+        })
+        recommendations.append(
+            f"Pause replenishment for '{p_name}' at {st_name}: current stock of {stock} units with average daily sales of {ads:.2f} units/day (recent 90-day sales: {recent_sold}) provides {days_rounded} days of coverage, exceeding the 30-day threshold."
+        )
+        evidence.append({
+            "product_name": p_name,
+            "category": row["category"],
+            "store_name": st_name,
+            "current_stock": stock,
+            "recent_90d_sales": recent_sold,
+            "avg_daily_sales": round(ads, 2),
+            "days_remaining": f"{days_rounded} days",
+            "status": "OVERSTOCK",
+            "source": "inventory ledger"
+        })
+        chart_labels.append(f"{p_name} — {st_name}")
+        chart_days.append(days_rounded)
+
+    transfers = get_interstore_transfer_opportunities(inv_df)
+    if transfers:
+        for t in transfers[:3]:
+            recommendations.append(t["recommendation"])
+
+    summary_text = (
+        f"{len(over_df)} product-store inventory records meet the overstock threshold based on average daily demand over the last {window_days} days ({start_d} to {end_d}). Showing the top {len(top_over)} highest-coverage records."
+    )
+    if excluded_count > 0:
+        summary_text += f" ({excluded_count} records were excluded because required inventory or recent demand data was unavailable)."
+
+    chart_spec = {
+        "type": "horizontal_bar",
+        "title": "Inventory Coverage — Overstocked Products",
+        "labels": chart_labels,
+        "datasets": [{
+            "label": "Days of Coverage",
+            "data": chart_days,
+            "unit": "d",
+            "color": "#2563EB"
+        }]
+    }
+
+    return {
+        "intent": "OVERSTOCK",
+        "data_scope": full_data_scope,
+        "data_sufficiency": "sufficient" if excluded_count == 0 else "partial",
+        "context_summary": summary_text,
+        "metrics": metrics,
+        "recommendations": recommendations,
+        "evidence": evidence,
+        "chart_data": chart_spec
+    }
+
+def run_low_stock_analysis(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
+    store_filter = spec.get("store")
+    store_id = store_filter["store_id"] if store_filter else None
+    cat_filter = spec.get("category")
+
+    start_d, end_d, window_days = get_recent_demand_period()
+    inv_df = get_inventory_status_df(store_id=store_id, category=cat_filter)
+
+    demand_scope_info = f"Demand Basis: Last {window_days} days ({start_d} to {end_d}) • Reorder Target: 7 days"
+    full_data_scope = f"{data_scope_str} • {demand_scope_info}"
+
+    if inv_df.empty:
+        return {
+            "intent": "LOW_STOCK",
+            "data_scope": full_data_scope,
+            "data_sufficiency": "sufficient",
+            "context_summary": "All inventory levels are healthy.",
+            "metrics": [
+                {"label": "Demand Basis", "value": f"Last {window_days} days ({start_d} to {end_d})"},
+                {"label": "Reorder Target", "value": "7 days"}
+            ],
+            "recommendations": [],
+            "evidence": [],
+            "chart_data": None
+        }
+
+    total_analyzed = len(inv_df)
+    no_data_df = inv_df[inv_df["status"].isin(["NO_RECENT_DEMAND", "NO_STOCK_DATA"])]
+    excluded_count = len(no_data_df)
+
+    low_df = inv_df[inv_df["status"].isin(["CRITICAL", "WARNING", "OUT_OF_STOCK"])].sort_values(by="days_remaining")
+
+    if low_df.empty:
+        return {
+            "intent": "LOW_STOCK",
+            "data_scope": full_data_scope,
+            "data_sufficiency": "sufficient" if excluded_count == 0 else "partial",
+            "context_summary": f"Evaluated {total_analyzed} product-store records based on {window_days}-day demand ({start_d} to {end_d}). Zero products are at stockout risk (all items cover > 7 days of demand).",
+            "metrics": [
+                {"label": "Demand Basis", "value": f"Last {window_days} days ({start_d} to {end_d})"},
+                {"label": "Reorder Target", "value": "7 days"},
+                {"label": "Stockout Risk Records", "value": "0 records"}
+            ],
+            "recommendations": ["Maintain weekly inventory audit and stock replenishment schedule."],
+            "evidence": [],
+            "chart_data": None
+        }
+
+    metrics = [
+        {"label": "Demand Basis", "value": f"Last {window_days} days ({start_d} to {end_d})"},
+        {"label": "Reorder Target", "value": "7 days"},
+        {"label": "Stockout Risk Records", "value": f"{len(low_df)} records"}
+    ]
+    recommendations = []
+    evidence = []
+    chart_labels = []
+    chart_days = []
+
+    for _, row in low_df.head(10).iterrows():
+        p_name = row["product_name"]
+        st_name = row["store_name"]
+        stock = int(row["current_stock"]) if not pd.isna(row["current_stock"]) else 0
+        recent_sold = int(row["recent_units_sold"])
+        ads = float(row["average_daily_sales"])
+        days = float(row["days_remaining"]) if not pd.isna(row["days_remaining"]) else 0.0
+        reorder_qty = int(row["recommended_reorder"])
+        status = row["status"]
+
+        status_lbl = "CRITICAL" if status in ["CRITICAL", "OUT_OF_STOCK"] else "RUNNING LOW"
+
+        target_stock_val = ads * TARGET_COVERAGE_DAYS
+        ceil_target = int(np.ceil(target_stock_val))
+
+        metrics.append({
+            "label": f"{p_name} ({st_name})",
+            "value": f"{stock} units ({days:.1f} days left — {status_lbl})"
+        })
+        recommendations.append(
+            f"Reorder +{reorder_qty} units of '{p_name}' at {st_name}. Current stock: {stock} units (covers {days:.1f} days, avg daily sales {ads:.1f}/day). Target stock (7 days): {ads:.1f} × 7 = {target_stock_val:.1f} ≈ {ceil_target} units. Recommended reorder: {ceil_target} - {stock} = {reorder_qty} units."
+        )
+        evidence.append({
+            "product_name": p_name,
+            "category": row["category"],
+            "store_name": st_name,
+            "current_stock": stock,
+            "recent_90d_sales": recent_sold,
+            "avg_daily_sales": round(ads, 2),
+            "days_remaining": f"{days:.1f} days",
+            "status": status_lbl,
+            "recommended_reorder": reorder_qty,
+            "target_stock": ceil_target,
+            "source": "inventory ledger"
+        })
+        chart_labels.append(f"{p_name} — {st_name}")
+        chart_days.append(round(days, 1))
+
+    summary_text = f"Identified {len(low_df)} products at stockout risk requiring immediate replenishment based on {window_days}-day demand ({start_d} to {end_d})."
+    if excluded_count > 0:
+        summary_text += f" ({excluded_count} records were excluded because required inventory or recent demand data was unavailable)."
+
+    chart_spec = {
+        "type": "bar",
+        "title": "Days Remaining — Products at Stockout Risk",
+        "labels": chart_labels,
+        "datasets": [{
+            "label": "Days Stock Remaining",
+            "data": chart_days,
+            "unit": "d",
+            "color": "#ef4444"
+        }]
+    }
+
+    return {
+        "intent": "LOW_STOCK",
+        "data_scope": full_data_scope,
+        "data_sufficiency": "sufficient" if excluded_count == 0 else "partial",
+        "context_summary": summary_text,
+        "metrics": metrics,
+        "recommendations": recommendations,
+        "evidence": evidence,
+        "chart_data": chart_spec
+    }
+
+def run_reorder_analysis(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
+    res = run_low_stock_analysis(spec, data_scope_str)
+    res["intent"] = "REORDER"
+    return res
+
+def run_attention_analysis(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
+    res = run_low_stock_analysis(spec, data_scope_str)
+    res["intent"] = "ATTENTION_ITEMS"
+    res["context_summary"] = res["context_summary"].replace("products at stockout risk", "operational priority items")
+    return res
 
 def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -653,7 +925,7 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
             })
 
         metrics = [
-            {"label": "Total Revenue", "value": f"${tot_rev:,.2f}"},
+            {"label": "Total Revenue", "value": f"₹{tot_rev:,.2f}"},
             {"label": "Total Units Sold", "value": f"{tot_units:,} units"},
             {"label": "Best Performing SKU", "value": top_sku['product_name'] if top_sku else 'N/A'}
         ]
@@ -661,8 +933,8 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
         entity_title = product_family or (matched_products[0]["product_name"] if matched_products else "Products")
         summary_text = (
             f"Performance analysis for '{entity_title}' across {store_name} ({time_label}): "
-            f"Total Revenue: ${tot_rev:,.2f} across {tot_units:,} units sold. "
-            f"Top performing product within family: '{top_sku['product_name'] if top_sku else 'N/A'}' with ${top_sku['total_revenue']:,.2f} revenue."
+            f"Total Revenue: ₹{tot_rev:,.2f} across {tot_units:,} units sold. "
+            f"Top performing product within family: '{top_sku['product_name'] if top_sku else 'N/A'}' with ₹{top_sku['total_revenue']:,.2f} revenue."
         )
 
         labels = [r["year"] for r in yearly_results]
@@ -674,7 +946,7 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
             "title": f"{entity_title} Revenue Trajectory ({time_label})",
             "labels": [r["product_name"][:16] for r in sku_results] if len(sku_results) > 1 and intent == "TOP_PRODUCTS" else labels,
             "datasets": [{
-                "label": "Revenue ($)",
+                "label": "Revenue (₹)",
                 "data": [r["total_revenue"] for r in sku_results] if len(sku_results) > 1 and intent == "TOP_PRODUCTS" else revs,
                 "color": "#087F80"
             }]
@@ -729,12 +1001,13 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
             "source": "sales ledger"
         } for r in results]
 
-        metrics = [{"label": r["product_name"], "value": f"${r['total_revenue']:,.2f} ({r['total_units_sold']:,} units)"} for r in results]
+        metrics = [{"label": r["product_name"], "value": f"₹{r['total_revenue']:,.2f} ({r['total_units_sold']:,} units)"} for r in results]
         top_p = results[0] if results else None
 
+        metric_name = spec.get('metric', 'revenue')
         summary_text = (
-            f"Top product by {spec['metric']} for {time_label} across {store_name} is "
-            f"'{top_p['product_name'] if top_p else 'N/A'}' with ${top_p['total_revenue']:,.2f} revenue ({top_p['total_units_sold']:,} units)."
+            f"Top product by {metric_name} for {time_label} across {store_name} is "
+            f"'{top_p['product_name'] if top_p else 'N/A'}' with ₹{top_p['total_revenue']:,.2f} revenue ({top_p['total_units_sold']:,} units)."
             if top_p else "No sales data found for the selected scope."
         )
 
@@ -751,7 +1024,7 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
                 "type": "horizontal_bar",
                 "title": f"Top Products by Revenue ({time_label})",
                 "labels": [r["product_name"][:16] for r in results],
-                "datasets": [{"label": "Revenue ($)", "data": [r["total_revenue"] for r in results], "color": "#087F80"}]
+                "datasets": [{"label": "Revenue (₹)", "data": [r["total_revenue"] for r in results], "color": "#087F80"}]
             }
         }
 
@@ -779,8 +1052,8 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
             "intent": intent,
             "data_scope": data_scope_str,
             "data_sufficiency": "sufficient",
-            "context_summary": f"Ranked category performance for {time_label}. Lead category: '{top_c['category'] if top_c else 'N/A'}' generating ${top_c['total_revenue']:,.2f}.",
-            "metrics": [{"label": r["category"], "value": f"${r['total_revenue']:,.2f}"} for r in results],
+            "context_summary": f"Ranked category performance for {time_label}. Lead category: '{top_c['category'] if top_c else 'N/A'}' generating ₹{top_c['total_revenue']:,.2f}.",
+            "metrics": [{"label": r["category"], "value": f"₹{r['total_revenue']:,.2f}"} for r in results],
             "recommendations": [f"Expand merchandising in category '{top_c['category'] if top_c else 'N/A'}'."],
             "evidence": [{"category": r["category"], "revenue": r["total_revenue"], "units_sold": r["total_units"], "source": "sales ledger"} for r in results],
             "raw_data": results,
@@ -788,7 +1061,7 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
                 "type": "bar",
                 "title": f"Category Performance ({time_label})",
                 "labels": [r["category"] for r in results],
-                "datasets": [{"label": "Revenue ($)", "data": [r["total_revenue"] for r in results], "color": "#2B6CB0"}]
+                "datasets": [{"label": "Revenue (₹)", "data": [r["total_revenue"] for r in results], "color": "#2B6CB0"}]
             }
         }
 
@@ -819,8 +1092,8 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
             "intent": intent,
             "data_scope": data_scope_str,
             "data_sufficiency": "sufficient",
-            "context_summary": f"Ranked store performance for {time_label}. Top store: {top_st['store_name'] if top_st else 'N/A'} with ${top_st['total_revenue']:,.2f} revenue.",
-            "metrics": [{"label": r["store_name"], "value": f"${r['total_revenue']:,.2f}"} for r in results],
+            "context_summary": f"Ranked store performance for {time_label}. Top store: {top_st['store_name'] if top_st else 'N/A'} with ₹{top_st['total_revenue']:,.2f} revenue.",
+            "metrics": [{"label": r["store_name"], "value": f"₹{r['total_revenue']:,.2f}"} for r in results],
             "recommendations": [f"Prioritize inventory allocation for high-velocity store '{top_st['store_name'] if top_st else 'N/A'}'."],
             "evidence": [{"store_name": r["store_name"], "revenue": r["total_revenue"], "units_sold": r["total_units_sold"], "source": "sales ledger"} for r in results],
             "raw_data": results,
@@ -828,7 +1101,7 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
                 "type": "bar",
                 "title": f"Store Revenue Comparison ({time_label})",
                 "labels": [r["store_name"] for r in results],
-                "datasets": [{"label": "Revenue ($)", "data": [r["total_revenue"] for r in results], "color": "#f59e0b"}]
+                "datasets": [{"label": "Revenue (₹)", "data": [r["total_revenue"] for r in results], "color": "#f59e0b"}]
             }
         }
 
@@ -855,11 +1128,11 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
             "intent": intent,
             "data_scope": data_scope_str,
             "data_sufficiency": "sufficient",
-            "context_summary": f"Comparative revenue analysis: Year {y1} produced ${rev1:,.2f} ({units1:,} units), whereas Year {y2} produced ${rev2:,.2f} ({units2:,} units). Net Change: {pct:+.1f}% (${diff:+,.2f}).",
+            "context_summary": f"Comparative revenue analysis: Year {y1} produced ₹{rev1:,.2f} ({units1:,} units), whereas Year {y2} produced ₹{rev2:,.2f} ({units2:,} units). Net Change: {pct:+.1f}% (₹{diff:+,.2f}).",
             "metrics": [
-                {"label": f"Revenue {y1}", "value": f"${rev1:,.2f}"},
-                {"label": f"Revenue {y2}", "value": f"${rev2:,.2f}"},
-                {"label": "Net Growth", "value": f"{pct:+.1f}% (${diff:+,.2f})"}
+                {"label": f"Revenue {y1}", "value": f"₹{rev1:,.2f}"},
+                {"label": f"Revenue {y2}", "value": f"₹{rev2:,.2f}"},
+                {"label": "Net Growth", "value": f"{pct:+.1f}% (₹{diff:+,.2f})"}
             ],
             "recommendations": [f"Capitalize on growth momentum observed between {y1} and {y2}."],
             "evidence": [
@@ -871,45 +1144,22 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
                 "type": "bar",
                 "title": f"Revenue Comparison: {y1} vs {y2}",
                 "labels": [str(y1), str(y2)],
-                "datasets": [{"label": "Revenue ($)", "data": [rev1, rev2], "color": "#087F80"}]
+                "datasets": [{"label": "Revenue (₹)", "data": [rev1, rev2], "color": "#087F80"}]
             }
         }
 
-    # 6. INVENTORY / REORDER / ATTENTION ITEMS
-    if intent in ["ATTENTION_ITEMS", "REORDER", "LOW_STOCK", "OVERSTOCK", "INVENTORY_SNAPSHOT"]:
-        items = get_attention_items()
-        evidence_list = []
-        rec_list = []
-        metrics = []
+    # 6. INVENTORY / REORDER / ATTENTION ITEMS / OVERSTOCK
+    if intent == "OVERSTOCK":
+        return run_overstock_analysis(spec, data_scope_str)
 
-        for item in items[:5]:
-            evidence_list.append({
-                "product_name": item["product_name"],
-                "store_name": item["store_name"],
-                "current_stock": item["current_stock"],
-                "avg_daily_sales": item["avg_daily_sales"],
-                "days_remaining": item["days_remaining"],
-                "source": "inventory ledger"
-            })
-            rec_list.append(f"{item['product_name']}: {item['recommended_action']}")
-            metrics.append({"label": item['product_name'], "value": f"{item['current_stock']} units ({item['days_remaining']} days left)"})
+    if intent in ["LOW_STOCK", "STOCKOUT_RISK"]:
+        return run_low_stock_analysis(spec, data_scope_str)
 
-        return {
-            "intent": intent,
-            "data_scope": data_scope_str,
-            "data_sufficiency": "sufficient",
-            "context_summary": f"Identified {len(items)} inventory status items requiring operational attention.",
-            "metrics": metrics,
-            "recommendations": rec_list,
-            "evidence": evidence_list,
-            "raw_data": items,
-            "chart_data": {
-                "type": "bar",
-                "title": "Operational Attention Priority Items",
-                "labels": [it["product_name"][:12] for it in items[:5]],
-                "datasets": [{"label": "Days Stock Remaining", "data": [it["days_remaining"] for it in items[:5]], "color": "#ef4444"}]
-            }
-        }
+    if intent == "REORDER":
+        return run_reorder_analysis(spec, data_scope_str)
+
+    if intent in ["ATTENTION_ITEMS", "INVENTORY_SNAPSHOT"]:
+        return run_attention_analysis(spec, data_scope_str)
 
     # 7. SEASONALITY ANALYSIS
     if intent == "SEASONALITY":
@@ -943,7 +1193,7 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
             "data_scope": data_scope_str,
             "data_sufficiency": "sufficient",
             "context_summary": f"Calculated 10-year monthly demand seasonality profile across all available historical records.",
-            "metrics": [{"label": labels[i], "value": f"${revs[i]:,.2f}"} for i in range(min(4, len(labels)))],
+            "metrics": [{"label": labels[i], "value": f"₹{revs[i]:,.2f}"} for i in range(min(4, len(labels)))],
             "recommendations": ["Prepare inventory buffer ahead of peak historical demand months."],
             "evidence": evidence,
             "raw_data": results,
@@ -951,7 +1201,7 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
                 "type": "bar",
                 "title": "10-Year Monthly Demand Seasonality Profile",
                 "labels": labels,
-                "datasets": [{"label": "Average Revenue ($)", "data": revs, "color": "#2B6CB0"}]
+                "datasets": [{"label": "Average Revenue (₹)", "data": revs, "color": "#2B6CB0"}]
             }
         }
 
@@ -966,7 +1216,7 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
         pct = ((rev_end - rev_start) / rev_start * 100.0) if rev_start > 0 else 0.0
 
         summary_text = (
-            f"Observed historical sales increased by {pct:+.1f}% from ${rev_start:,.2f} ({y_start}) to ${rev_end:,.2f} ({y_end}). "
+            f"Observed historical sales increased by {pct:+.1f}% from ₹{rev_start:,.2f} ({y_start}) to ₹{rev_end:,.2f} ({y_end}). "
             f"However, the dataset contains transaction sales ledger and inventory stock levels, but does NOT contain marketing campaigns, "
             f"advertisements, pricing adjustments, or competitor data. Therefore, the specific root cause cannot be established without inventing unverified facts."
         )
@@ -977,8 +1227,8 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
             "data_sufficiency": "insufficient",
             "context_summary": summary_text,
             "metrics": [
-                {"label": f"Initial ({y_start})", "value": f"${rev_start:,.2f}"},
-                {"label": f"Latest ({y_end})", "value": f"${rev_end:,.2f}"},
+                {"label": f"Initial ({y_start})", "value": f"₹{rev_start:,.2f}"},
+                {"label": f"Latest ({y_end})", "value": f"₹{rev_end:,.2f}"},
                 {"label": "Historical Growth", "value": f"{pct:+.1f}%"}
             ],
             "recommendations": ["Correlate external marketing or pricing logs with internal sales trends for root-cause verification."],
@@ -988,7 +1238,7 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
                 "type": "line",
                 "title": "Historical Revenue Trajectory",
                 "labels": [r["year"] for r in yearly],
-                "datasets": [{"label": "Revenue ($)", "data": [r["revenue"] for r in yearly], "color": "#087F80"}]
+                "datasets": [{"label": "Revenue (₹)", "data": [r["revenue"] for r in yearly], "color": "#087F80"}]
             }
         }
 
@@ -1018,9 +1268,9 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
         "intent": intent,
         "data_scope": data_scope_str,
         "data_sufficiency": "sufficient",
-        "context_summary": f"Historical sales summary for {time_label} across {store_name}. Total Revenue: ${tot_rev:,.2f} ({tot_units:,} units sold).",
+        "context_summary": f"Historical sales summary for {time_label} across {store_name}. Total Revenue: ₹{tot_rev:,.2f} ({tot_units:,} units sold).",
         "metrics": [
-            {"label": "Total Revenue", "value": f"${tot_rev:,.2f}"},
+            {"label": "Total Revenue", "value": f"₹{tot_rev:,.2f}"},
             {"label": "Units Sold", "value": f"{tot_units:,} units"},
             {"label": "Time Period", "value": time_label}
         ],
@@ -1031,6 +1281,6 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
             "type": "line",
             "title": f"Revenue Trend ({time_label})",
             "labels": labels,
-            "datasets": [{"label": "Revenue ($)", "data": revs, "color": "#087F80"}]
+            "datasets": [{"label": "Revenue (₹)", "data": revs, "color": "#087F80"}]
         }
     }

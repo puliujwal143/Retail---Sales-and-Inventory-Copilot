@@ -300,7 +300,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const overstockEl = document.getElementById("kpi-overstock-count");
             const growthEl = document.getElementById("kpi-growth-rate");
 
-            if (revEl) revEl.textContent = `$${data.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+            if (revEl) revEl.textContent = `₹${data.total_revenue.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
             if (unitsEl) unitsEl.textContent = data.total_units_sold.toLocaleString();
             
             const lowStockTotal = data.critical_low_stock_count + data.warning_low_stock_count;
@@ -308,12 +308,20 @@ document.addEventListener("DOMContentLoaded", () => {
             if (overstockEl) overstockEl.textContent = data.overstock_count;
             if (growthEl) growthEl.textContent = "+21.6%";
 
-            // Render mini sparklines cleanly inside KPI cards
-            renderMiniSparkline("sparkline-revenue", [12000, 14500, 13200, 16800, 18500, 21000, data.total_revenue], "#16A34A");
-            renderMiniSparkline("sparkline-units", [420, 480, 450, 520, 590, 610, data.total_units_sold], "#8B5CF6");
-            renderMiniSparkline("sparkline-lowstock", [8, 12, 10, 14, 9, 11, lowStockTotal], "#F59E0B");
-            renderMiniSparkline("sparkline-overstock", [15, 18, 14, 16, 20, 19, data.overstock_count], "#2563EB");
-            renderMiniSparkline("sparkline-growth", [4, 6, 8, 7, 10, 11, 21.6], "#16A34A");
+            // Render mini sparklines cleanly inside KPI cards from real database aggregations
+            if (data.sparklines) {
+                if (data.sparklines.revenue) renderMiniSparkline("sparkline-revenue", data.sparklines.revenue, "#16A34A");
+                if (data.sparklines.units) renderMiniSparkline("sparkline-units", data.sparklines.units, "#8B5CF6");
+                if (data.sparklines.lowstock) renderMiniSparkline("sparkline-lowstock", data.sparklines.lowstock, "#F59E0B");
+                if (data.sparklines.overstock) renderMiniSparkline("sparkline-overstock", data.sparklines.overstock, "#2563EB");
+                if (data.sparklines.growth) renderMiniSparkline("sparkline-growth", data.sparklines.growth, "#16A34A");
+            } else {
+                renderMiniSparkline("sparkline-revenue", [12000, 14500, 13200, 16800, 18500, 21000, data.total_revenue], "#16A34A");
+                renderMiniSparkline("sparkline-units", [420, 480, 450, 520, 590, 610, data.total_units_sold], "#8B5CF6");
+                renderMiniSparkline("sparkline-lowstock", [8, 12, 10, 14, 9, 11, lowStockTotal], "#F59E0B");
+                renderMiniSparkline("sparkline-overstock", [15, 18, 14, 16, 20, 19, data.overstock_count], "#2563EB");
+                renderMiniSparkline("sparkline-growth", [4, 6, 8, 7, 10, 11, 21.6], "#16A34A");
+            }
 
             loadNeedsAttentionItems();
             loadDashboardChartOnly();
@@ -336,7 +344,16 @@ document.addEventListener("DOMContentLoaded", () => {
             if (state.selectedDate) url += `&date=${state.selectedDate}`;
             const res = await fetch(url);
             const data = await res.json();
-            renderSVGChart("dashboard-sales-chart", data.revenue_trend);
+            
+            const subEl = document.getElementById("dashboard-chart-subtitle");
+            const chartSpec = data.combined_trend || data.revenue_trend;
+            if (subEl && chartSpec && chartSpec.subtitle) {
+                subEl.textContent = chartSpec.subtitle;
+            } else if (subEl) {
+                subEl.textContent = state.dashboardTimeframe > 90 ? "Monthly revenue and units sold over time" : "Daily revenue and units sold over time";
+            }
+
+            renderSVGChart("dashboard-sales-chart", chartSpec);
         } catch (err) {
             console.error("Failed to load dashboard chart:", err);
         }
@@ -446,7 +463,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <td><strong>#${idx + 1}</strong></td>
                 <td><strong>${p.product_name}</strong></td>
                 <td class="text-right"><strong>${p.units_sold}</strong></td>
-                <td class="text-right"><strong>$${p.revenue.toLocaleString('en-US', {minimumFractionDigits: 2})}</strong></td>
+                <td class="text-right"><strong>₹${p.revenue.toLocaleString('en-IN', {minimumFractionDigits: 2})}</strong></td>
                 <td class="text-right"><span class="badge badge-success">+18.5%</span></td>
             </tr>
         `).join("");
@@ -463,7 +480,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return `
                 <tr>
                     <td><strong>${s.store_name}</strong></td>
-                    <td class="text-right"><strong>$${rev.toLocaleString('en-US', {minimumFractionDigits: 2})}</strong></td>
+                    <td class="text-right"><strong>₹${rev.toLocaleString('en-IN', {minimumFractionDigits: 2})}</strong></td>
                     <td class="text-right"><strong>${Math.round(rev / 150)}</strong></td>
                     <td class="text-right"><span class="badge badge-success">+${targetPct}%</span></td>
                 </tr>
@@ -598,7 +615,7 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("modal-stock-val").textContent = data.metrics.current_stock;
             document.getElementById("modal-ads-val").textContent = `${data.metrics.avg_daily_sales.toFixed(1)} / day`;
             document.getElementById("modal-days-val").textContent = `${data.metrics.days_remaining} days`;
-            document.getElementById("modal-revenue-val").textContent = `$${data.metrics["30d_revenue"].toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+            document.getElementById("modal-revenue-val").textContent = `₹${data.metrics["30d_revenue"].toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
 
             const reorderQty = data.metrics.recommended_reorder;
             if (reorderQty > 0) {
@@ -629,7 +646,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 type: "line",
                 title: "30-Day Product Sales Trend",
                 labels: dates,
-                datasets: [{ label: "Daily Revenue ($)", data: revs, color: "#087F80" }]
+                datasets: [{ label: "Daily Revenue (₹)", data: revs, color: "#087F80" }]
             };
             renderSVGChart("modal-sales-chart", chartSpec);
 
@@ -658,9 +675,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const salesDailyEl = document.getElementById("sales-kpi-daily-rev");
             const salesTopCatEl = document.getElementById("sales-kpi-top-cat");
 
-            if (salesRevEl) salesRevEl.textContent = `$${revSum.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+            if (salesRevEl) salesRevEl.textContent = `₹${revSum.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
             if (salesUnitsEl) salesUnitsEl.textContent = unitSum.toLocaleString();
-            if (salesDailyEl) salesDailyEl.textContent = `$${dailyAvg.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+            if (salesDailyEl) salesDailyEl.textContent = `₹${dailyAvg.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
             if (salesTopCatEl) salesTopCatEl.textContent = data.category_chart?.labels?.[0] || "Computers";
 
             if (data.revenue_trend) renderSVGChart("chart-sales-revenue", data.revenue_trend);
@@ -730,109 +747,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // SVG Chart Render Engine (Supports line, area, bar, horizontal_bar)
-    function renderSVGChart(containerId, chartSpec) {
-        const container = document.getElementById(containerId);
-        if (!container) return;
-        
-        if (!chartSpec || !chartSpec.labels || chartSpec.labels.length === 0) {
-            container.innerHTML = '<div style="color:var(--text-muted); font-size:12px; padding:20px; text-align:center;">No chart data available.</div>';
-            return;
-        }
 
-        const width = container.clientWidth || 500;
-        const height = container.clientHeight || 200;
-        const padding = 35;
-
-        const type = chartSpec.type || "line";
-        const labels = chartSpec.labels;
-        const datasets = chartSpec.datasets || [];
-        if (datasets.length === 0) {
-            container.innerHTML = '<div style="color:var(--text-muted); font-size:12px; padding:20px; text-align:center;">No chart data available.</div>';
-            return;
-        }
-
-        if (type === "line" || type === "area") {
-            let maxVal = 10;
-            datasets.forEach(ds => {
-                const vals = (ds.data || []).filter(v => v !== null && v !== undefined);
-                if (vals.length > 0) {
-                    const m = Math.max(...vals);
-                    if (m > maxVal) maxVal = m;
-                }
-            });
-
-            const polylinesHTML = datasets.map(ds => {
-                const color = ds.color || "#087F80";
-                const points = (ds.data || []).map((v, i) => {
-                    if (v === null || v === undefined) return null;
-                    const x = padding + (i / Math.max(1, labels.length - 1)) * (width - 2 * padding);
-                    const y = height - padding - (v / maxVal) * (height - 2 * padding);
-                    return `${x},${y}`;
-                }).filter(p => p !== null).join(" ");
-
-                return `<polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" points="${points}" />`;
-            }).join("");
-
-            const svgHTML = `
-                <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%; overflow: hidden;">
-                    <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#E5EAF0" stroke-width="1" />
-                    <line x1="${padding}" y1="${padding}" x2="${width - padding}" y2="${padding}" stroke="#E5EAF0" stroke-dasharray="4" stroke-width="1" />
-                    ${polylinesHTML}
-                    <text x="${padding}" y="${padding - 8}" fill="#64748B" font-size="10" font-weight="600">$${Math.round(maxVal).toLocaleString()}</text>
-                    <text x="${padding}" y="${height - 6}" fill="#64748B" font-size="10">${labels[0] || ''}</text>
-                    <text x="${width - padding - 45}" y="${height - 6}" fill="#64748B" font-size="10">${labels[labels.length - 1] || ''}</text>
-                </svg>
-            `;
-            container.innerHTML = svgHTML;
-
-        } else if (type === "bar") {
-            const dataVals = datasets[0].data || [];
-            const maxVal = Math.max(...dataVals.filter(v => v !== null && v !== undefined), 10);
-            const barWidth = (width - 2 * padding) / Math.max(1, dataVals.length);
-
-            const barsHTML = dataVals.map((v, i) => {
-                const val = v || 0;
-                const barHeight = (val / maxVal) * (height - 2 * padding);
-                const x = padding + i * barWidth + barWidth * 0.15;
-                const y = height - padding - barHeight;
-                const w = Math.max(2, barWidth * 0.7);
-                return `
-                    <rect x="${x}" y="${y}" width="${w}" height="${barHeight}" fill="${datasets[0].color || '#087F80'}" rx="3" />
-                    <text x="${x + w/2}" y="${height - 6}" fill="#64748B" font-size="9" text-anchor="middle">${labels[i] ? String(labels[i]).substring(0, 8) : ''}</text>
-                `;
-            }).join("");
-
-            container.innerHTML = `
-                <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%;">
-                    <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#E5EAF0" stroke-width="1" />
-                    ${barsHTML}
-                </svg>
-            `;
-        } else if (type === "horizontal_bar") {
-            const dataVals = datasets[0].data || [];
-            const maxVal = Math.max(...dataVals.filter(v => v !== null && v !== undefined), 10);
-            const rowHeight = (height - 2 * padding) / Math.max(1, dataVals.length);
-
-            const barsHTML = dataVals.map((v, i) => {
-                const val = v || 0;
-                const barWidth = (val / maxVal) * (width - 160);
-                const y = padding + i * rowHeight + rowHeight * 0.15;
-                const h = Math.max(4, rowHeight * 0.7);
-                return `
-                    <text x="${padding}" y="${y + h/1.3}" fill="#334155" font-size="10" font-weight="600">${labels[i] ? String(labels[i]).substring(0, 18) : ''}</text>
-                    <rect x="140" y="${y}" width="${barWidth}" height="${h}" fill="${datasets[0].color || '#06b6d4'}" rx="3" />
-                    <text x="${145 + barWidth}" y="${y + h/1.3}" fill="#64748B" font-size="10" font-weight="600">$${Math.round(val).toLocaleString()}</text>
-                `;
-            }).join("");
-
-            container.innerHTML = `
-                <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%;">
-                    ${barsHTML}
-                </svg>
-            `;
-        }
-    }
 
     // Load Intelligent Reorder Planner
     function setupReorderPlanner() {
@@ -988,9 +903,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const tableRowsHTML = data.comparison_table.map(s => `
                 <tr>
                     <td><strong>${s.store_name}</strong><br><span style="font-size:10px; color:var(--text-muted);">${s.location}</span></td>
-                    <td class="text-right"><strong>$${s.total_revenue.toLocaleString('en-US', {minimumFractionDigits:2})}</strong></td>
+                    <td class="text-right"><strong>₹${s.total_revenue.toLocaleString('en-IN', {minimumFractionDigits:2})}</strong></td>
                     <td class="text-right">${s.units_sold.toLocaleString()} units</td>
-                    <td class="text-right">$${s.avg_daily_revenue.toLocaleString('en-US', {minimumFractionDigits:2})}/day</td>
+                    <td class="text-right">₹${s.avg_daily_revenue.toLocaleString('en-IN', {minimumFractionDigits:2})}/day</td>
                     <td><span class="badge badge-critical">${s.critical_items} Critical</span></td>
                     <td><span class="badge badge-info">${s.overstock_items} Overstock</span></td>
                 </tr>
@@ -1056,9 +971,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
 
                 <div class="kpi-grid" style="margin-bottom:20px;">
-                    <div class="kpi-card"><div class="kpi-title">TOTAL REVENUE</div><div class="kpi-value">$${kpis.total_revenue.toLocaleString('en-US', {minimumFractionDigits:2})}</div></div>
+                    <div class="kpi-card"><div class="kpi-title">TOTAL REVENUE</div><div class="kpi-value">₹${kpis.total_revenue.toLocaleString('en-IN', {minimumFractionDigits:2})}</div></div>
                     <div class="kpi-card"><div class="kpi-title">UNITS SOLD</div><div class="kpi-value">${kpis.total_units_sold.toLocaleString()}</div></div>
-                    <div class="kpi-card"><div class="kpi-title">VALUATION</div><div class="kpi-value">$${kpis.total_inventory_valuation.toLocaleString('en-US', {minimumFractionDigits:2})}</div></div>
+                    <div class="kpi-card"><div class="kpi-title">VALUATION</div><div class="kpi-value">₹${kpis.total_inventory_valuation.toLocaleString('en-IN', {minimumFractionDigits:2})}</div></div>
                     <div class="kpi-card highlight-critical"><div class="kpi-title">CRITICAL SKUs</div><div class="kpi-value">${kpis.critical_low_stock_count}</div></div>
                 </div>
 
@@ -1066,7 +981,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     <div>
                         <h4 style="font-size:13px; font-weight:700; margin-bottom:8px;">Top Performing SKUs</h4>
                         <ul style="font-size:12px; line-height:1.6; padding-left:16px;">
-                            ${rep.top_products.map(p => `<li><strong>${p.product_name}</strong>: $${p.revenue.toLocaleString()} (${p.units_sold} units)</li>`).join("")}
+                            ${rep.top_products.map(p => `<li><strong>${p.product_name}</strong>: ₹${p.revenue.toLocaleString('en-IN')} (${p.units_sold} units)</li>`).join("")}
                         </ul>
                     </div>
                     <div>
@@ -1111,88 +1026,357 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
     }
 
-    // SVG Chart Render Engine (Supports multi-dataset, line, bar, horizontal_bar, donut)
+    // Helper to format currency for axis & tooltips
+    function formatChartCurrency(val, compact = true) {
+        if (val === null || val === undefined || isNaN(val)) return "₹0";
+        if (compact) {
+            if (Math.abs(val) >= 10000000) return `₹${(val / 10000000).toFixed(1)}Cr`;
+            if (Math.abs(val) >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
+            if (Math.abs(val) >= 1000) return `₹${(val / 1000).toFixed(0)}k`;
+            return `₹${Math.round(val)}`;
+        }
+        return `₹${Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+
+    // Helper to format numbers for axis & tooltips
+    function formatChartNumber(val, compact = true) {
+        if (val === null || val === undefined || isNaN(val)) return "0";
+        if (compact) {
+            if (Math.abs(val) >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
+            if (Math.abs(val) >= 1000) return `${(val / 1000).toFixed(1)}k`;
+            return `${Math.round(val)}`;
+        }
+        return Number(val).toLocaleString();
+    }
+
+    // Tooltip singleton helper
+    function getOrCreateChartTooltip() {
+        let tt = document.getElementById("retailiq-chart-tooltip");
+        if (!tt) {
+            tt = document.createElement("div");
+            tt.id = "retailiq-chart-tooltip";
+            tt.style.position = "fixed";
+            tt.style.display = "none";
+            tt.style.pointerEvents = "none";
+            tt.style.zIndex = "999999";
+            tt.style.background = "#0F172A";
+            tt.style.color = "#FFFFFF";
+            tt.style.padding = "10px 14px";
+            tt.style.borderRadius = "8px";
+            tt.style.fontSize = "12px";
+            tt.style.lineHeight = "1.5";
+            tt.style.boxShadow = "0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4)";
+            tt.style.border = "1px solid #334155";
+            tt.style.transition = "opacity 0.12s ease-out";
+            document.body.appendChild(tt);
+        }
+        return tt;
+    }
+
+    // SVG Chart Render Engine (Supports dual_axis, line, area, bar, horizontal_bar, donut)
     function renderSVGChart(containerId, chartSpec) {
         const container = document.getElementById(containerId);
-        if (!container || !chartSpec || !chartSpec.labels || chartSpec.labels.length === 0) {
-            if (container) container.innerHTML = '<div style="color:var(--text-muted); font-size:12px; padding:20px; text-align:center;">No chart data available for this query.</div>';
+        if (!container) return;
+        
+        if (!chartSpec || !chartSpec.labels || chartSpec.labels.length === 0) {
+            container.innerHTML = '<div style="color:var(--text-muted); font-size:12px; padding:30px; text-align:center;">No chart data available for this query.</div>';
             return;
         }
 
-        const width = 500;
-        const height = 200;
-        const padding = 30;
+        const width = 600;
+        const height = 220;
+        const paddingLeft = 55;
+        const paddingRight = (chartSpec.type === "dual_axis") ? 55 : 25;
+        const paddingTop = 25;
+        const paddingBottom = 35;
+        const plotWidth = width - paddingLeft - paddingRight;
+        const plotHeight = height - paddingTop - paddingBottom;
 
         const type = chartSpec.type || "line";
         const labels = chartSpec.labels;
         const datasets = chartSpec.datasets && chartSpec.datasets.length > 0 ? chartSpec.datasets : [{ label: "Data", data: [], color: "#087F80" }];
+        const isPartialFlags = chartSpec.is_partial || [];
+        const avgDailyRevs = chartSpec.avg_daily_revenue || [];
+        const avgDailyUnits = chartSpec.avg_daily_units || [];
 
-        if (type === "line" || type === "area") {
+        const tooltip = getOrCreateChartTooltip();
+
+        if (type === "dual_axis") {
+            // Dual-Axis: Dataset 0 = Revenue (Left Axis), Dataset 1 = Units Sold (Right Axis)
+            const revData = datasets[0]?.data || [];
+            const unitsData = datasets[1]?.data || [];
+
+            const validRevs = revData.filter(v => typeof v === 'number' && !isNaN(v));
+            const validUnits = unitsData.filter(v => typeof v === 'number' && !isNaN(v));
+
+            const maxRev = validRevs.length > 0 ? Math.max(...validRevs, 100) : 100;
+            const maxUnits = validUnits.length > 0 ? Math.max(...validUnits, 10) : 10;
+
+            const revColor = datasets[0]?.color || "#087F80";
+            const unitsColor = datasets[1]?.color || "#3B82F6";
+
+            // Grid lines (3 horizontal lines)
+            const gridLines = [0, 0.5, 1.0].map(ratio => {
+                const y = paddingTop + plotHeight * (1 - ratio);
+                const revTick = formatChartCurrency(maxRev * ratio, true);
+                const unitTick = formatChartNumber(maxUnits * ratio, true);
+                return `
+                    <line x1="${paddingLeft}" y1="${y}" x2="${width - paddingRight}" y2="${y}" stroke="#E2E8F0" stroke-dasharray="3,3" stroke-width="1" />
+                    <text x="${paddingLeft - 8}" y="${y + 4}" fill="#64748B" font-size="10" font-weight="600" text-anchor="end">${revTick}</text>
+                    <text x="${width - paddingRight + 8}" y="${y + 4}" fill="#3B82F6" font-size="10" font-weight="600" text-anchor="start">${unitTick}</text>
+                `;
+            }).join("");
+
+            // Revenue Points & Path
+            const revPoints = revData.map((v, i) => {
+                const val = (typeof v === 'number' && !isNaN(v)) ? v : 0;
+                const x = paddingLeft + (i / Math.max(1, labels.length - 1)) * plotWidth;
+                const y = paddingTop + plotHeight - (val / maxRev) * plotHeight;
+                return { x, y, val, label: labels[i], idx: i };
+            });
+
+            // Units Points & Path
+            const unitPoints = unitsData.map((v, i) => {
+                const val = (typeof v === 'number' && !isNaN(v)) ? v : 0;
+                const x = paddingLeft + (i / Math.max(1, labels.length - 1)) * plotWidth;
+                const y = paddingTop + plotHeight - (val / maxUnits) * plotHeight;
+                return { x, y, val, label: labels[i], idx: i };
+            });
+
+            const revPolyline = revPoints.map(p => `${p.x},${p.y}`).join(" ");
+            const unitPolyline = unitPoints.map(p => `${p.x},${p.y}`).join(" ");
+
+            const areaPoints = `${paddingLeft},${paddingTop + plotHeight} ` + revPolyline + ` ${width - paddingRight},${paddingTop + plotHeight}`;
+
+            // X-Axis Labels (Display First, Middle, Last, or up to 6 labels evenly spaced)
+            const step = Math.max(1, Math.floor(labels.length / 5));
+            const xLabelsHTML = labels.map((lbl, i) => {
+                if (i === 0 || i === labels.length - 1 || i % step === 0) {
+                    const x = paddingLeft + (i / Math.max(1, labels.length - 1)) * plotWidth;
+                    const isPartial = isPartialFlags[i];
+                    return `<text x="${x}" y="${height - 10}" fill="${isPartial ? '#D97706' : '#64748B'}" font-size="10" font-weight="${isPartial ? '700' : '500'}" text-anchor="middle">${lbl}</text>`;
+                }
+                return '';
+            }).join("");
+
+            // Interactive Hover Columns
+            const colWidth = plotWidth / Math.max(1, labels.length);
+            const hoverColumnsHTML = labels.map((lbl, i) => {
+                const x = paddingLeft + (i / Math.max(1, labels.length - 1)) * plotWidth - (colWidth / 2);
+                const rP = revPoints[i];
+                const uP = unitPoints[i];
+                const isPart = isPartialFlags[i] || false;
+                const avgR = avgDailyRevs[i] || 0;
+                const avgU = avgDailyUnits[i] || 0;
+                return `
+                    <g class="chart-hover-col" data-idx="${i}" style="cursor:pointer;">
+                        <rect x="${Math.max(paddingLeft, x)}" y="${paddingTop}" width="${colWidth}" height="${plotHeight}" fill="transparent" />
+                        <circle class="hover-dot-rev" cx="${rP.x}" cy="${rP.y}" r="4" fill="${revColor}" stroke="#FFFFFF" stroke-width="2" />
+                        <circle class="hover-dot-unit" cx="${uP.x}" cy="${uP.y}" r="4" fill="${unitsColor}" stroke="#FFFFFF" stroke-width="2" />
+                    </g>
+                `;
+            }).join("");
+
+            container.innerHTML = `
+                <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%; overflow: visible;" id="svg_${containerId}">
+                    <defs>
+                        <linearGradient id="grad_rev_${containerId}" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="${revColor}" stop-opacity="0.25"/>
+                            <stop offset="100%" stop-color="${revColor}" stop-opacity="0.0"/>
+                        </linearGradient>
+                    </defs>
+                    ${gridLines}
+                    <polygon points="${areaPoints}" fill="url(#grad_rev_${containerId})" />
+                    <polyline fill="none" stroke="${unitsColor}" stroke-width="2" stroke-dasharray="4,3" stroke-linecap="round" points="${unitPolyline}" />
+                    <polyline fill="none" stroke="${revColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="${revPolyline}" />
+                    ${xLabelsHTML}
+                    ${hoverColumnsHTML}
+                </svg>
+            `;
+
+            // Attach interactive hover events
+            const hoverCols = container.querySelectorAll(".chart-hover-col");
+            hoverCols.forEach(col => {
+                col.addEventListener("mouseenter", (e) => {
+                    const idx = parseInt(col.getAttribute("data-idx"), 10);
+                    const isPart = isPartialFlags[idx];
+                    const rVal = revData[idx] || 0;
+                    const uVal = unitsData[idx] || 0;
+                    const avgR = avgDailyRevs[idx];
+                    const avgU = avgDailyUnits[idx];
+                    const lbl = labels[idx];
+
+                    let tipHTML = `<div style="font-weight:700; color:#F8FAFC; margin-bottom:4px; font-size:12px;">📅 ${lbl}</div>`;
+                    tipHTML += `<div style="color:#2DD4BF; font-weight:600;">💰 Revenue: ${formatChartCurrency(rVal, false)}</div>`;
+                    tipHTML += `<div style="color:#93C5FD; font-weight:600;">📦 Units Sold: ${formatChartNumber(uVal, false)} units</div>`;
+
+                    if (isPart) {
+                        tipHTML += `
+                            <div style="margin-top:6px; padding-top:6px; border-top:1px dashed #475569; font-size:11px; color:#FBBF24;">
+                                ⚠️ <strong>Partial Period (3 Days)</strong><br>
+                                Avg Daily: ${formatChartCurrency(avgR, false)} / day<br>
+                                Avg Units: ${Math.round(avgU)} units / day
+                            </div>
+                        `;
+                    }
+                    tooltip.innerHTML = tipHTML;
+                    tooltip.style.display = "block";
+                    tooltip.style.left = `${e.clientX + 14}px`;
+                    tooltip.style.top = `${e.clientY - 12}px`;
+                });
+
+                col.addEventListener("mousemove", (e) => {
+                    tooltip.style.left = `${e.clientX + 14}px`;
+                    tooltip.style.top = `${e.clientY - 12}px`;
+                });
+
+                col.addEventListener("mouseleave", () => {
+                    tooltip.style.display = "none";
+                });
+            });
+
+        } else if (type === "line" || type === "area") {
             let maxVal = 10;
             datasets.forEach(ds => {
-                const m = Math.max(...ds.data.filter(v => v !== null && v !== undefined && !isNaN(v)));
+                const m = Math.max(...(ds.data || []).filter(v => typeof v === 'number' && !isNaN(v)));
                 if (m > maxVal) maxVal = m;
             });
 
+            // Grid lines
+            const gridLines = [0, 0.5, 1.0].map(ratio => {
+                const y = paddingTop + plotHeight * (1 - ratio);
+                const isRev = (datasets[0]?.label && datasets[0].label.toLowerCase().includes("revenue")) || (chartSpec.title && chartSpec.title.toLowerCase().includes("revenue"));
+                const tick = isRev ? formatChartCurrency(maxVal * ratio, true) : formatChartNumber(maxVal * ratio, true);
+                return `
+                    <line x1="${paddingLeft}" y1="${y}" x2="${width - paddingRight}" y2="${y}" stroke="#E2E8F0" stroke-dasharray="3,3" stroke-width="1" />
+                    <text x="${paddingLeft - 8}" y="${y + 4}" fill="#64748B" font-size="10" font-weight="600" text-anchor="end">${tick}</text>
+                `;
+            }).join("");
+
             const polylinesHTML = datasets.map(ds => {
                 const color = ds.color || "#087F80";
-                const points = ds.data.map((v, i) => {
+                const points = (ds.data || []).map((v, i) => {
                     if (v === null || v === undefined || isNaN(v)) return null;
-                    const x = padding + (i / Math.max(1, labels.length - 1)) * (width - 2 * padding);
-                    const y = height - padding - (v / maxVal) * (height - 2 * padding);
+                    const x = paddingLeft + (i / Math.max(1, labels.length - 1)) * plotWidth;
+                    const y = paddingTop + plotHeight - (v / maxVal) * plotHeight;
                     return `${x},${y}`;
                 }).filter(p => p !== null).join(" ");
 
                 return `<polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" points="${points}" />`;
             }).join("");
 
-            const svgHTML = `
-                <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%; overflow: hidden;">
-                    <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#E5EAF0" stroke-width="1" />
-                    <line x1="${padding}" y1="${padding}" x2="${width - padding}" y2="${padding}" stroke="#E5EAF0" stroke-dasharray="4" stroke-width="1" />
-                    ${polylinesHTML}
-                    <text x="${padding}" y="${padding - 8}" fill="#64748B" font-size="10" font-weight="600">$${Math.round(maxVal).toLocaleString()}</text>
-                    <text x="${padding}" y="${height - 6}" fill="#64748B" font-size="10">${labels[0] || ''}</text>
-                    <text x="${width - padding - 45}" y="${height - 6}" fill="#64748B" font-size="10">${labels[labels.length - 1] || ''}</text>
-                </svg>
-            `;
-            container.innerHTML = svgHTML;
+            // X-Axis Labels
+            const step = Math.max(1, Math.floor(labels.length / 5));
+            const xLabelsHTML = labels.map((lbl, i) => {
+                if (i === 0 || i === labels.length - 1 || i % step === 0) {
+                    const x = paddingLeft + (i / Math.max(1, labels.length - 1)) * plotWidth;
+                    const isPartial = isPartialFlags[i];
+                    return `<text x="${x}" y="${height - 10}" fill="${isPartial ? '#D97706' : '#64748B'}" font-size="10" font-weight="${isPartial ? '700' : '500'}" text-anchor="middle">${lbl}</text>`;
+                }
+                return '';
+            }).join("");
 
-        } else if (type === "horizontal_bar") {
-            const dataVals = datasets[0].data;
-            const maxVal = Math.max(...dataVals.filter(v => typeof v === 'number' && !isNaN(v))) || 100;
-            const barHeight = (height - 2 * padding) / Math.max(1, dataVals.length);
-
-            const barsHTML = dataVals.map((v, i) => {
-                const valNum = typeof v === 'number' ? v : 0;
-                const barW = Math.max(2, (valNum / maxVal) * (width - 2 * padding - 120));
-                const y = padding + i * barHeight + barHeight * 0.15;
-                const h = Math.max(4, barHeight * 0.7);
-                const color = datasets[0].color || '#f59e0b';
-                const lbl = labels[i] ? String(labels[i]).substring(0, 16) : '';
-                const valStr = valNum >= 1000 ? '$' + Math.round(valNum).toLocaleString() : valNum;
+            // Interactive points
+            const dataPoints = (datasets[0]?.data || []).map((v, i) => {
+                const val = (typeof v === 'number' && !isNaN(v)) ? v : 0;
+                const x = paddingLeft + (i / Math.max(1, labels.length - 1)) * plotWidth;
+                const y = paddingTop + plotHeight - (val / maxVal) * plotHeight;
                 return `
-                    <text x="${padding}" y="${y + h/2 + 3}" fill="#64748B" font-size="9" font-weight="600" text-anchor="start">${lbl}</text>
-                    <rect x="${padding + 110}" y="${y}" width="${barW}" height="${h}" fill="${color}" rx="3" />
-                    <text x="${padding + 115 + barW}" y="${y + h/2 + 3}" fill="#1E293B" font-size="9" font-weight="600" text-anchor="start">${valStr}</text>
+                    <circle class="chart-point" data-idx="${i}" cx="${x}" cy="${y}" r="4" fill="${datasets[0]?.color || '#087F80'}" stroke="#FFFFFF" stroke-width="2" style="cursor:pointer;" />
                 `;
             }).join("");
 
             container.innerHTML = `
-                <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%;">
+                <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%; overflow: visible;">
+                    ${gridLines}
+                    ${polylinesHTML}
+                    ${dataPoints}
+                    ${xLabelsHTML}
+                </svg>
+            `;
+
+            // Hover events
+            container.querySelectorAll(".chart-point").forEach(pt => {
+                pt.addEventListener("mouseenter", (e) => {
+                    const idx = parseInt(pt.getAttribute("data-idx"), 10);
+                    const val = datasets[0]?.data?.[idx] || 0;
+                    const isPart = isPartialFlags[idx];
+                    const isRev = (datasets[0]?.label && datasets[0].label.toLowerCase().includes("revenue")) || (chartSpec.title && chartSpec.title.toLowerCase().includes("revenue"));
+                    
+                    let tipHTML = `<div style="font-weight:700; color:#F8FAFC; margin-bottom:2px;">${labels[idx]}</div>`;
+                    tipHTML += `<div style="color:#2DD4BF; font-weight:600;">${isRev ? formatChartCurrency(val, false) : formatChartNumber(val, false) + ' units'}</div>`;
+                    if (isPart) {
+                        tipHTML += `<div style="color:#FBBF24; font-size:11px; margin-top:3px;">⚠️ Partial Period</div>`;
+                    }
+                    tooltip.innerHTML = tipHTML;
+                    tooltip.style.display = "block";
+                    tooltip.style.left = `${e.clientX + 14}px`;
+                    tooltip.style.top = `${e.clientY - 12}px`;
+                });
+                pt.addEventListener("mousemove", (e) => {
+                    tooltip.style.left = `${e.clientX + 14}px`;
+                    tooltip.style.top = `${e.clientY - 12}px`;
+                });
+                pt.addEventListener("mouseleave", () => {
+                    tooltip.style.display = "none";
+                });
+            });
+
+        } else if (type === "horizontal_bar") {
+            const dataVals = datasets[0]?.data || [];
+            const maxVal = Math.max(...dataVals.filter(v => typeof v === 'number' && !isNaN(v))) || 100;
+
+            const chartWidth = 650;
+            const chartHeight = Math.max(220, dataVals.length * 28 + 30);
+            const labelWidth = 260;
+            const barAreaWidth = chartWidth - labelWidth - 110;
+            const barHeight = (chartHeight - 40) / Math.max(1, dataVals.length);
+
+            const isDays = (datasets[0]?.unit === 'd') || (datasets[0]?.label && datasets[0].label.toLowerCase().includes('days')) || (chartSpec.title && chartSpec.title.toLowerCase().includes('coverage'));
+            const isUnits = (datasets[0]?.unit === 'units') || (datasets[0]?.label && datasets[0].label.toLowerCase().includes('unit'));
+
+            const barsHTML = dataVals.map((v, i) => {
+                const valNum = typeof v === 'number' ? v : 0;
+                const absMax = Math.max(1, Math.abs(maxVal));
+                const barW = Math.max(3, (Math.abs(valNum) / absMax) * barAreaWidth);
+                const y = 20 + i * barHeight + barHeight * 0.15;
+                const h = Math.max(6, barHeight * 0.7);
+                const color = datasets[0]?.color || '#087F80';
+                const lbl = labels[i] ? String(labels[i]) : '';
+
+                let valStr = '';
+                if (isDays) {
+                    valStr = Math.round(valNum).toLocaleString() + ' days';
+                } else if (isUnits) {
+                    valStr = Math.round(valNum).toLocaleString() + ' units';
+                } else {
+                    valStr = formatChartCurrency(valNum, false);
+                }
+
+                return `
+                    <g class="chart-hbar" data-idx="${i}">
+                        <text x="15" y="${y + h/2 + 4}" fill="#334155" font-size="11" font-weight="600" text-anchor="start">${lbl.substring(0, 32)}</text>
+                        <rect x="${labelWidth}" y="${y}" width="${barW}" height="${h}" fill="${color}" rx="3" />
+                        <text x="${labelWidth + barW + 8}" y="${y + h/2 + 4}" fill="#0F172A" font-size="11" font-weight="700" text-anchor="start">${valStr}</text>
+                    </g>
+                `;
+            }).join("");
+
+            container.innerHTML = `
+                <svg viewBox="0 0 ${chartWidth} ${chartHeight}" style="width: 100%; height: 100%;">
                     ${barsHTML}
                 </svg>
             `;
 
         } else if (type === "donut" || type === "pie") {
-            const dataVals = datasets[0].data.map(v => (typeof v === 'number' && !isNaN(v)) ? v : 0);
+            const dataVals = (datasets[0]?.data || []).map(v => (typeof v === 'number' && !isNaN(v)) ? v : 0);
             const total = dataVals.reduce((a, b) => a + b, 0) || 1;
-            const palette = ["#087F80", "#2B6CB0", "#D69E2E", "#E53E3E", "#805AD5", "#319795", "#DD6B20"];
+            const palette = ["#087F80", "#2563EB", "#D97706", "#DC2626", "#8B5CF6", "#0D9488", "#EA580C"];
 
             let cumulativeAngle = 0;
-            const cx = 100;
+            const cx = 110;
             const cy = height / 2;
-            const r = Math.min(cx, cy) - 15;
+            const r = Math.min(cx, cy) - 18;
             const innerR = type === "donut" ? r * 0.55 : 0;
 
             const slicesHTML = dataVals.map((v, i) => {
@@ -1227,12 +1411,13 @@ document.addEventListener("DOMContentLoaded", () => {
             const legendHTML = labels.map((lbl, i) => {
                 const color = palette[i % palette.length];
                 const val = dataVals[i];
-                const ly = 25 + i * 20;
+                const ly = 25 + i * 22;
                 if (ly > height - 10) return '';
-                const valStr = val >= 1000 ? '$' + Math.round(val).toLocaleString() : val;
+                const pct = Math.round((val / total) * 100);
+                const valStr = formatChartCurrency(val, true);
                 return `
-                    <rect x="220" y="${ly}" width="10" height="10" fill="${color}" rx="2" />
-                    <text x="236" y="${ly + 9}" fill="#475569" font-size="10">${lbl ? String(lbl).substring(0, 20) : ''}: ${valStr}</text>
+                    <rect x="230" y="${ly}" width="10" height="10" fill="${color}" rx="2" />
+                    <text x="248" y="${ly + 9}" fill="#334155" font-size="11" font-weight="600">${lbl ? String(lbl).substring(0, 22) : ''}: <tspan fill="#64748B">${valStr} (${pct}%)</tspan></text>
                 `;
             }).join("");
 
@@ -1244,29 +1429,69 @@ document.addEventListener("DOMContentLoaded", () => {
             `;
 
         } else {
-            // Default Bar Chart
-            const dataVals = datasets[0].data;
-            const maxVal = Math.max(...dataVals.filter(v => typeof v === 'number' && !isNaN(v))) || 100;
-            const barWidth = (width - 2 * padding) / Math.max(1, dataVals.length);
+            // Default Bar Chart (e.g. units trend, store performance, yearly, seasonality)
+            const dataVals = datasets[0]?.data || [];
+            const maxVal = Math.max(...dataVals.filter(v => typeof v === 'number' && !isNaN(v))) || 10;
+            const barWidth = plotWidth / Math.max(1, dataVals.length);
+
+            // Grid lines
+            const isRev = (datasets[0]?.label && datasets[0].label.toLowerCase().includes("revenue")) || (chartSpec.title && chartSpec.title.toLowerCase().includes("revenue"));
+            const gridLines = [0, 0.5, 1.0].map(ratio => {
+                const y = paddingTop + plotHeight * (1 - ratio);
+                const tick = isRev ? formatChartCurrency(maxVal * ratio, true) : formatChartNumber(maxVal * ratio, true);
+                return `
+                    <line x1="${paddingLeft}" y1="${y}" x2="${width - paddingRight}" y2="${y}" stroke="#E2E8F0" stroke-dasharray="3,3" stroke-width="1" />
+                    <text x="${paddingLeft - 8}" y="${y + 4}" fill="#64748B" font-size="10" font-weight="600" text-anchor="end">${tick}</text>
+                `;
+            }).join("");
 
             const barsHTML = dataVals.map((v, i) => {
-                const valNum = typeof v === 'number' ? v : 0;
-                const barHeight = (valNum / maxVal) * (height - 2 * padding);
-                const x = padding + i * barWidth + barWidth * 0.15;
-                const y = height - padding - barHeight;
-                const w = Math.max(2, barWidth * 0.7);
+                const valNum = (typeof v === 'number' && !isNaN(v)) ? v : 0;
+                const barHeight = (valNum / maxVal) * plotHeight;
+                const x = paddingLeft + i * barWidth + barWidth * 0.15;
+                const y = paddingTop + plotHeight - barHeight;
+                const w = Math.max(3, barWidth * 0.7);
+                const isPart = isPartialFlags[i];
+                const col = isPart ? '#F59E0B' : (datasets[0]?.color || '#087F80');
+
                 return `
-                    <rect x="${x}" y="${y}" width="${w}" height="${barHeight}" fill="${datasets[0].color || '#087F80'}" rx="3" />
-                    <text x="${x + w/2}" y="${height - 6}" fill="#64748B" font-size="9" text-anchor="middle">${labels[i] ? String(labels[i]).substring(0, 8) : ''}</text>
+                    <g class="chart-bar-group" data-idx="${i}" style="cursor:pointer;">
+                        <rect x="${x}" y="${y}" width="${w}" height="${barHeight}" fill="${col}" rx="3" />
+                        <text x="${x + w/2}" y="${height - 10}" fill="${isPart ? '#D97706' : '#64748B'}" font-size="9" font-weight="${isPart ? '700' : '500'}" text-anchor="middle">${labels[i] ? String(labels[i]).substring(0, 8) : ''}</text>
+                    </g>
                 `;
             }).join("");
 
             container.innerHTML = `
                 <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%;">
-                    <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#E5EAF0" stroke-width="1" />
+                    ${gridLines}
                     ${barsHTML}
                 </svg>
             `;
+
+            container.querySelectorAll(".chart-bar-group").forEach(b => {
+                b.addEventListener("mouseenter", (e) => {
+                    const idx = parseInt(b.getAttribute("data-idx"), 10);
+                    const val = dataVals[idx] || 0;
+                    const isPart = isPartialFlags[idx];
+                    let tipHTML = `<div style="font-weight:700; color:#F8FAFC; margin-bottom:2px;">${labels[idx]}</div>`;
+                    tipHTML += `<div style="color:#2DD4BF; font-weight:600;">${isRev ? formatChartCurrency(val, false) : formatChartNumber(val, false) + ' units'}</div>`;
+                    if (isPart) {
+                        tipHTML += `<div style="color:#FBBF24; font-size:11px; margin-top:3px;">⚠️ Partial Period</div>`;
+                    }
+                    tooltip.innerHTML = tipHTML;
+                    tooltip.style.display = "block";
+                    tooltip.style.left = `${e.clientX + 14}px`;
+                    tooltip.style.top = `${e.clientY - 12}px`;
+                });
+                b.addEventListener("mousemove", (e) => {
+                    tooltip.style.left = `${e.clientX + 14}px`;
+                    tooltip.style.top = `${e.clientY - 12}px`;
+                });
+                b.addEventListener("mouseleave", () => {
+                    tooltip.style.display = "none";
+                });
+            });
         }
     }
 
@@ -1285,7 +1510,12 @@ document.addEventListener("DOMContentLoaded", () => {
         userMsgDiv.innerHTML = `<div>${userQuery}</div>`;
         messagesContainer.appendChild(userMsgDiv);
 
-        if (loadingCard) loadingCard.classList.remove("hidden");
+        if (loadingCard) {
+            loadingCard.classList.remove("hidden");
+            loadingCard.style.display = "flex";
+            const loadText = loadingCard.querySelector(".loading-text") || loadingCard.querySelector("span") || loadingCard;
+            if (loadText) loadText.textContent = "Analyzing retail database...";
+        }
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
         // Assistant Message Placeholder
@@ -1303,6 +1533,11 @@ document.addEventListener("DOMContentLoaded", () => {
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
         try {
+            if (loadingCard) {
+                const loadText = loadingCard.querySelector(".loading-text") || loadingCard.querySelector("span") || loadingCard;
+                if (loadText) loadText.textContent = "Preparing evidence...";
+            }
+
             const res = await fetch("/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -1317,7 +1552,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div style="color: var(--status-critical);">Error executing AI query. Please check server logs.</div>
             `;
         } finally {
-            if (loadingCard) loadingCard.classList.add("hidden");
+            if (loadingCard) {
+                loadingCard.classList.add("hidden");
+                loadingCard.style.display = "none";
+            }
         }
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
@@ -1325,10 +1563,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // Render Grounded BI Executive Response in Chat
     function renderCopilotResponse(msgElement, data) {
         const sufficiencyBadge = data.data_sufficiency === "sufficient" ?
-            `<span class="badge badge-success">✔ Data Grounded & Sufficient</span>` :
+            `<span class="badge badge-success">✔ Answered from Retail Data</span>` :
             (data.data_sufficiency === "partial" ?
-                `<span class="badge badge-warning">⚠️ Data Partially Available — External Cause Unverified</span>` :
-                `<span class="badge badge-critical">❌ Data Insufficient</span>`);
+                `<span class="badge badge-warning">⚠️ Partially Answered</span>` :
+                `<span class="badge badge-critical">❌ Not Answerable</span>`);
 
         let scopeHTML = "";
         if (data.data_scope) {
@@ -1382,7 +1620,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                 ${e.year ? `<div><strong>Year:</strong> ${e.year}</div>` : ''}
                                 ${e.product_name ? `<div><strong>Product:</strong> ${e.product_name}</div>` : ''}
                                 ${e.store_name ? `<div><strong>Store:</strong> ${e.store_name}</div>` : ''}
-                                ${e.revenue !== undefined ? `<div><strong>Revenue:</strong> ${typeof e.revenue === 'number' ? '$' + Math.round(e.revenue).toLocaleString() : e.revenue}</div>` : ''}
+                                ${e.revenue !== undefined ? `<div><strong>Revenue:</strong> ${typeof e.revenue === 'number' ? '₹' + Math.round(e.revenue).toLocaleString('en-IN') : e.revenue}</div>` : ''}
                                 ${e.units_sold !== undefined ? `<div><strong>Units:</strong> ${typeof e.units_sold === 'number' ? e.units_sold.toLocaleString() : e.units_sold}</div>` : ''}
                                 ${e.current_stock !== undefined && e.current_stock !== "N/A" ? `<div><strong>Stock:</strong> ${e.current_stock}</div>` : ''}
                                 ${e.avg_daily_sales !== undefined && e.avg_daily_sales !== 0 ? `<div><strong>Avg Daily:</strong> ${e.avg_daily_sales}</div>` : ''}

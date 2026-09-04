@@ -392,7 +392,7 @@ def classify_intent(text: str, entities: Dict[str, Any], date_info: Dict[str, An
         return "REORDER"
     if any(k in q for k in ["low stock", "running out", "running low", "critical stock", "stockout risk"]):
         return "LOW_STOCK"
-    if any(k in q for k in ["overstock", "excess inventory", "too much stock", "dead inventory"]):
+    if any(k in q for k in ["overstock", "excess inventory", "too much stock", "dead inventory", "slow moving", "slow-moving", "slowest moving"]):
         return "OVERSTOCK"
     if any(k in q for k in ["inventory", "stock level", "stock coverage", "days of stock", "today's inventory"]):
         return "INVENTORY_SNAPSHOT"

@@ -1,5 +1,7 @@
 import os
 import sys
+import math
+import numpy as np
 import uvicorn
 from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
@@ -258,9 +260,14 @@ def api_product_detail(product_id: str, store_id: Optional[str] = "all", date: O
         prod_inv = df[df["product_id"] == product_id] if not df.empty else None
         
         current_stock = int(prod_inv["current_stock"].sum()) if prod_inv is not None and not prod_inv.empty else 0
-        units_sold_30d = int(prod_inv["units_sold_30d"].sum()) if prod_inv is not None and not prod_inv.empty else 0
-        avg_daily_sales = float(units_sold_30d / 30.0)
-        days_remaining = float(current_stock / avg_daily_sales) if avg_daily_sales > 0 else 999.0
+        recent_units_sold = int(prod_inv["recent_units_sold"].sum()) if prod_inv is not None and not prod_inv.empty else 0
+        recent_revenue = float(prod_inv["recent_revenue"].sum()) if prod_inv is not None and not prod_inv.empty else 0.0
+        avg_daily_sales = float(prod_inv["average_daily_sales"].sum()) if prod_inv is not None and not prod_inv.empty else 0.0
+        
+        if avg_daily_sales > 0:
+            days_remaining = round(current_stock / avg_daily_sales, 1)
+        else:
+            days_remaining = 999.0
         
         status = "HEALTHY"
         if current_stock <= 0:
@@ -269,13 +276,13 @@ def api_product_detail(product_id: str, store_id: Optional[str] = "all", date: O
             status = "CRITICAL"
         elif days_remaining <= 7.0:
             status = "WARNING"
-        elif units_sold_30d < 5 and current_stock >= 20:
+        elif recent_units_sold < 5 and current_stock >= 20:
             status = "SLOW_MOVING"
         elif days_remaining > 30 and current_stock >= 50:
             status = "OVERSTOCK"
 
         target_stock = avg_daily_sales * TARGET_COVERAGE_DAYS
-        reorder_qty = max(0, int(round(target_stock - current_stock)))
+        reorder_qty = max(0, int(np.ceil(target_stock - current_stock)))
 
         # Product daily trend (30 days)
         if date:
@@ -309,13 +316,13 @@ def api_product_detail(product_id: str, store_id: Optional[str] = "all", date: O
             "product": product_info,
             "metrics": {
                 "current_stock": current_stock,
-                "units_sold_30d": units_sold_30d,
+                "units_sold_30d": recent_units_sold,
                 "avg_daily_sales": round(avg_daily_sales, 2),
                 "days_remaining": round(days_remaining, 1),
                 "status": status,
                 "recommended_reorder": reorder_qty,
                 "target_coverage_days": TARGET_COVERAGE_DAYS,
-                "30d_revenue": round(units_sold_30d * product_info["unit_price"], 2)
+                "30d_revenue": round(recent_revenue, 2)
             },
             "sales_trend": trend_rows,
             "store_matrix": store_matrix,
