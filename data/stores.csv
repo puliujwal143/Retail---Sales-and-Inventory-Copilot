@@ -1,0 +1,6 @@
+store_id,store_name,location,size_sqft
+STR001,Downtown Flagship,City Center,12000
+STR002,Metro Hub Store,Transit Center,8500
+STR003,Westside Plaza,Suburban Mall,10000
+STR004,North Park Outlet,North Suburbs,6000
+STR005,Airport Express,Terminal 2,3500
