@@ -223,10 +223,10 @@ def api_sales():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/analytics/charts")
-def api_analytics_charts(days: int = 30, store_id: Optional[str] = "all", category: Optional[str] = "all"):
+def api_analytics_charts(days: int = 30, store_id: Optional[str] = "all", category: Optional[str] = "all", date: Optional[str] = None):
     """Returns multi-chart datasets and deterministic insights for the Sales Analytics Workspace."""
     try:
-        return get_sales_analytics_charts(days=days, store_id=store_id, category=category)
+        return get_sales_analytics_charts(days=days, store_id=store_id, category=category, target_date=date)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

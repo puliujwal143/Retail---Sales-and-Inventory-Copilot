@@ -138,35 +138,42 @@ def get_category_performance(store_id: Optional[str] = None) -> List[Dict[str, A
     """
     return query_all(query, params)
 
-def get_daily_sales_trend(days: int = 30, store_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Returns aggregate daily revenue and volume for the last N days."""
-    where_clause = ""
-    params = [days]
+def get_daily_sales_trend(days: int = 30, store_id: Optional[str] = None, target_date: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Returns aggregate daily revenue and volume for the N days relative to target_date (or max date)."""
+    where_parts = []
+    params = []
+    
     if store_id and store_id != "all":
-        where_clause = "AND s.store_id = ?"
-        params = [days, store_id]
+        where_parts.append("s.store_id = ?")
+        params.append(store_id)
+        
+    if target_date:
+        where_parts.append("s.date <= ? AND s.date >= date(?, '-' || ? || ' days')")
+        params.extend([target_date, target_date, days])
+    else:
+        where_parts.append("s.date >= date((SELECT MAX(date) FROM sales), '-' || ? || ' days')")
+        params.append(days)
+
+    where_clause = " WHERE " + " AND ".join(where_parts) if where_parts else ""
 
     query = f"""
-    WITH max_date_cte AS (
-        SELECT MAX(date) as max_date FROM sales
-    )
     SELECT 
         s.date,
         SUM(s.quantity) as total_units,
         ROUND(SUM(s.total_revenue), 2) as total_revenue
-    FROM sales s, max_date_cte m
-    WHERE s.date >= date(m.max_date, '-' || ? || ' days') {where_clause}
+    FROM sales s
+    {where_clause}
     GROUP BY s.date
     ORDER BY s.date ASC
     """
     return query_all(query, tuple(params))
 
-def get_sales_analytics_charts(days: int = 30, store_id: Optional[str] = "all", category: Optional[str] = "all") -> Dict[str, Any]:
+def get_sales_analytics_charts(days: int = 30, store_id: Optional[str] = "all", category: Optional[str] = "all", target_date: Optional[str] = None) -> Dict[str, Any]:
     """
     Generates structured chart specs and deterministic insights for the Sales Analytics Workspace.
     """
     # 1. Daily Trend (Revenue & Units)
-    daily = get_daily_sales_trend(days=days, store_id=store_id)
+    daily = get_daily_sales_trend(days=days, store_id=store_id, target_date=target_date)
     dates = [d["date"] for d in daily]
     revenues = [d["total_revenue"] for d in daily]
     units = [d["total_units"] for d in daily]

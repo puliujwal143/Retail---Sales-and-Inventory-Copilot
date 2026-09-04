@@ -7,7 +7,38 @@ from src.sales_rules import get_store_performance, get_category_performance, get
 def get_dashboard_summary(store_id: str = None, target_date: str = None) -> Dict[str, Any]:
     """
     Computes top-level KPIs for store managers, supporting historical date snapshots.
+    Validates target_date against database bounds.
     """
+    # Check DB date bounds
+    bounds = query_one("SELECT MIN(date) as min_date, MAX(date) as max_date FROM sales")
+    min_date = bounds["min_date"] if bounds else "2026-06-06"
+    max_date = bounds["max_date"] if bounds else "2026-09-03"
+
+    if target_date:
+        if target_date < min_date or target_date > max_date:
+            return {
+                "target_date": target_date,
+                "store_id": store_id or "all",
+                "no_data": True,
+                "message": f"No data available for {target_date}. Supported dataset range: {min_date} to {max_date}.",
+                "min_date": min_date,
+                "max_date": max_date,
+                "total_revenue": 0.0,
+                "total_units_sold": 0,
+                "total_transactions": 0,
+                "total_inventory_units": 0,
+                "total_inventory_valuation": 0.0,
+                "critical_low_stock_count": 0,
+                "warning_low_stock_count": 0,
+                "slow_moving_count": 0,
+                "overstock_count": 0,
+                "top_performing_store": "N/A",
+                "store_performance": [],
+                "category_performance": [],
+                "top_products": [],
+                "daily_trend": []
+            }
+
     where_sales = []
     params_sales = []
 
@@ -16,8 +47,8 @@ def get_dashboard_summary(store_id: str = None, target_date: str = None) -> Dict
         params_sales.append(store_id)
 
     if target_date:
-        where_sales.append("date <= ?")
-        params_sales.append(target_date)
+        where_sales.append("date <= ? AND date >= date(?, '-30 days')")
+        params_sales.extend([target_date, target_date])
 
     clause_str = " WHERE " + " AND ".join(where_sales) if where_sales else ""
 
@@ -52,8 +83,8 @@ def get_dashboard_summary(store_id: str = None, target_date: str = None) -> Dict
         top_prod_where.append("s.store_id = ?")
         top_prod_params.append(store_id)
     if target_date:
-        top_prod_where.append("s.date <= ?")
-        top_prod_params.append(target_date)
+        top_prod_where.append("s.date <= ? AND s.date >= date(?, '-30 days')")
+        top_prod_params.extend([target_date, target_date])
     
     top_clause = " WHERE " + " AND ".join(top_prod_where) if top_prod_where else ""
 
@@ -73,11 +104,12 @@ def get_dashboard_summary(store_id: str = None, target_date: str = None) -> Dict
     """, tuple(top_prod_params))
 
     # 5. Sales Trend (Last 30 Days relative to target_date or latest)
-    daily_trend = get_daily_sales_trend(30, store_id=store_id)
+    daily_trend = get_daily_sales_trend(30, store_id=store_id, target_date=target_date)
 
     return {
         "target_date": target_date,
         "store_id": store_id or "all",
+        "no_data": False,
         "total_revenue": round(sales_kpi["total_revenue"], 2),
         "total_units_sold": sales_kpi["total_units_sold"],
         "total_transactions": sales_kpi["total_transactions"],

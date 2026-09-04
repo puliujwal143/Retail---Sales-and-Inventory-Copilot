@@ -261,6 +261,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     salesStoreSel.appendChild(opt);
                 });
             }
+
+            setupStoreComparison();
         } catch (err) {
             console.error("Failed to load stores:", err);
         }
@@ -274,7 +276,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const res = await fetch(url);
             const data = await res.json();
-            state.dashboardData = data;
+            // Out-of-range date check
+            let noDataBanner = document.getElementById("date-no-data-banner");
+            if (data.no_data) {
+                if (!noDataBanner) {
+                    noDataBanner = document.createElement("div");
+                    noDataBanner.id = "date-no-data-banner";
+                    noDataBanner.style.cssText = "background:#FFFBEB; border:1px solid #FCD34D; color:#92400E; padding:12px 16px; border-radius:8px; font-weight:600; font-size:13px; margin-bottom:16px; display:flex; align-items:center; gap:8px;";
+                    const dashTab = document.getElementById("tab-dashboard");
+                    if (dashTab) dashTab.insertBefore(noDataBanner, dashTab.firstChild);
+                }
+                noDataBanner.innerHTML = `⚠️ ${data.message}`;
+                noDataBanner.style.display = "flex";
+            } else if (noDataBanner) {
+                noDataBanner.style.display = "none";
+            }
 
             // KPI Values Alignment
             const revEl = document.getElementById("kpi-revenue");
