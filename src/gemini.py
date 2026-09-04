@@ -1,0 +1,189 @@
+import os
+import json
+import logging
+from typing import Dict, Any
+
+logger = logging.getLogger("retailiq.gemini")
+
+SYSTEM_PROMPT = """You are a retail analytics assistant for a store manager running a small retail operation.
+
+CRITICAL GROUNDING RULES:
+1. Use ONLY the evidence supplied in the prompt context.
+2. Never invent sales, inventory, prices, products, stores, causes, or recommendations.
+3. Do NOT perform business calculations if calculated values are already supplied by the system.
+4. If the supplied evidence does not contain enough information to answer the question (e.g. asking why sales increased when no promotional or marketing data is in the evidence), EXPLICITLY state that the available data is insufficient to answer the cause.
+5. Do NOT infer causes or external factors (promotions, weather, ads, competitors) that are not supported by the evidence.
+6. Every factual statement must be supported by supplied figures.
+7. Mention relevant system assumptions (e.g., 7-day target inventory coverage, 2-day critical threshold).
+8. You are an explanation layer over a deterministic retail analytics system, NOT the source of truth.
+
+You MUST respond strictly in valid JSON format with the following keys:
+{
+  "answer": "Clear, professional, natural-language explanation grounded in the evidence.",
+  "key_metrics": [
+    {"label": "Metric Name", "value": "Metric Value"}
+  ],
+  "recommendations": [
+    "Actionable recommendation 1",
+    "Actionable recommendation 2"
+  ],
+  "evidence": [
+    {
+      "product_name": "Product",
+      "store_name": "Store",
+      "current_stock": 10,
+      "avg_daily_sales": 2.5,
+      "days_remaining": 4.0,
+      "units_sold": 75,
+      "sales_period": "Last 30 Days",
+      "source": "inventory + sales"
+    }
+  ],
+  "assumptions": [
+    "Assumption 1"
+  ],
+  "data_sufficiency": "sufficient" or "insufficient"
+}
+"""
+
+def generate_copilot_response(processed_query: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Sends structured query payload to Gemini for natural-language explanation.
+    Falls back gracefully to deterministic python response if Gemini key is absent or request fails.
+    """
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+
+    # If API key missing, immediately return deterministic fallback
+    if not api_key:
+        logger.info("GEMINI_API_KEY not found in environment. Using deterministic fallback engine.")
+        return create_deterministic_fallback(processed_query, "Gemini API key is not configured. (Operating in Offline Deterministic Mode)")
+
+    # Prepare prompt context
+    user_query = processed_query.get("user_query", "")
+    intent = processed_query.get("intent", "")
+    data_sufficiency = processed_query.get("data_sufficiency", "sufficient")
+    context_summary = processed_query.get("context_summary", "")
+    evidence = processed_query.get("evidence", [])
+    assumptions = processed_query.get("assumptions", [])
+    metrics = processed_query.get("metrics", [])
+    recommendations = processed_query.get("recommendations", [])
+
+    prompt_content = f"""USER QUESTION: "{user_query}"
+
+CLASSIFIED INTENT: {intent}
+SYSTEM DATA SUFFICIENCY: {data_sufficiency}
+ANALYTICS SUMMARY: {context_summary}
+
+SUPPLIED CALCULATED METRICS:
+{json.dumps(metrics, indent=2)}
+
+SUPPLIED EVIDENCE:
+{json.dumps(evidence, indent=2)}
+
+SYSTEM ASSUMPTIONS:
+{json.dumps(assumptions, indent=2)}
+
+SUPPLIED DETERMINISTIC RECOMMENDATIONS:
+{json.dumps(recommendations, indent=2)}
+
+Remember: Respond ONLY with valid JSON following the schema. Ground every statement in supplied numbers. If data sufficiency is 'insufficient', state clearly that external cause data is unavailable.
+"""
+
+    # Attempt to call Gemini via google-genai or google-generativeai
+    try:
+        try:
+            # Try new google-genai SDK first
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',  # standard flash model or fallback to 1.5-flash / 3.5-flash-lite
+                contents=prompt_content,
+                config={
+                    'system_instruction': SYSTEM_PROMPT,
+                    'temperature': 0.1,
+                    'response_mime_type': 'application/json'
+                }
+            )
+            raw_text = response.text
+        except Exception as genai_err:
+            logger.warning(f"google-genai SDK call failed or model unavailable ({genai_err}), trying google.generativeai...")
+            import google.generativeai as genai_legacy
+            genai_legacy.configure(api_key=api_key)
+            model = genai_legacy.GenerativeModel(
+                model_name="gemini-1.5-flash",
+                system_instruction=SYSTEM_PROMPT
+            )
+            response = model.generate_content(
+                prompt_content,
+                generation_config={"temperature": 0.1, "response_mime_type": "application/json"}
+            )
+            raw_text = response.text
+
+        # Parse JSON output
+        parsed_json = clean_and_parse_json(raw_text)
+        if parsed_json:
+            # Ensure required keys exist
+            parsed_json.setdefault("data_sufficiency", data_sufficiency)
+            parsed_json.setdefault("assumptions", assumptions)
+            parsed_json.setdefault("evidence", evidence)
+            return parsed_json
+        else:
+            logger.warning("Gemini returned non-JSON string. Falling back to deterministic output.")
+            return create_deterministic_fallback(processed_query, "Malformed LLM output received.")
+
+    except Exception as e:
+        logger.error(f"Gemini API request failed: {e}")
+        return create_deterministic_fallback(processed_query, f"Gemini API error ({str(e)})")
+
+def clean_and_parse_json(text: str) -> Dict[str, Any]:
+    """Cleans markdown code blocks and parses JSON safely."""
+    try:
+        cleaned = text.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        if cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+        return json.loads(cleaned)
+    except Exception as e:
+        logger.error(f"JSON parse error: {e}")
+        return None
+
+def create_deterministic_fallback(processed_query: Dict[str, Any], note: str = "") -> Dict[str, Any]:
+    """
+    Generates a 100% reliable, data-grounded answer when Gemini API is unavailable or returns invalid format.
+    Ensures app NEVER crashes.
+    """
+    user_query = processed_query.get("user_query", "")
+    intent = processed_query.get("intent", "")
+    data_sufficiency = processed_query.get("data_sufficiency", "sufficient")
+    context_summary = processed_query.get("context_summary", "")
+    evidence = processed_query.get("evidence", [])
+    assumptions = processed_query.get("assumptions", [])
+    metrics = processed_query.get("metrics", [])
+    recommendations = processed_query.get("recommendations", [])
+
+    if data_sufficiency == "insufficient":
+        answer = (
+            f"Regarding '{user_query}': {context_summary} "
+            f"The current dataset contains sales transaction history and inventory stock levels, but does NOT contain "
+            f"marketing campaigns, advertisements, price changes, or competitor data. Therefore, the specific root cause cannot be determined without inventing unverified facts."
+        )
+    else:
+        answer = f"Analysis for query '{user_query}': {context_summary}"
+        if recommendations:
+            answer += f" Key action: {recommendations[0]}"
+
+    if note:
+        answer += f" ({note})"
+
+    return {
+        "answer": answer,
+        "key_metrics": metrics,
+        "recommendations": recommendations,
+        "evidence": evidence,
+        "assumptions": assumptions,
+        "data_sufficiency": data_sufficiency
+    }
