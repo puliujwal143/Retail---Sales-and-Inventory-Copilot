@@ -1,19 +1,11 @@
 import re
+import pandas as pd
+from datetime import datetime, timedelta
 from typing import Dict, Any, List
 from src.inventory_rules import get_inventory_status_df, get_low_stock_items, get_slow_moving_items, get_overstocked_items, TARGET_COVERAGE_DAYS
 from src.sales_rules import get_product_sales_trends, get_sales_spikes, get_sales_drops, get_store_performance, get_category_performance, get_daily_sales_trend
 from src.recommendation import get_attention_items
 from src.evidence import create_evidence_item
-
-def process_query_intent(user_query: str) -> Dict[str, Any]:
-    """
-    Classifies natural language user intent deterministically, executes Python queries,
-    and returns a compact structured payload containing exact figures, evidence, assumptions,
-    and structured SVG chart specifications for the frontend engine.
-    """
-    q_lower = user_query.strip().lower()
-
-from datetime import datetime, timedelta
 
 def extract_date_from_query(query: str) -> str:
     """Extracts date ISO string YYYY-MM-DD from user query if present."""
