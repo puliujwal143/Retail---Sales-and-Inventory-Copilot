@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RetailIQ - Sales & Inventory Copilot</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="dark-theme">
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="logo-icon">📊</div>
+                <div class="brand-text">
+                    <h2>RetailIQ</h2>
+                    <span class="badge badge-primary">Copilot PS03</span>
+                </div>
+            </div>
+
+            <nav class="nav-menu">
+                <button class="nav-item active" data-tab="dashboard">
+                    <span class="icon">🏠</span> Dashboard
+                </button>
+                <button class="nav-item" data-tab="inventory">
+                    <span class="icon">📦</span> Inventory
+                </button>
+                <button class="nav-item" data-tab="sales">
+                    <span class="icon">📈</span> Sales Analytics
+                </button>
+                <button class="nav-item" data-tab="copilot">
+                    <span class="icon">🤖</span> AI Copilot
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text">SQLite + Gemini AI</span>
+                </div>
+                <div class="engine-tag">Deterministic Grounding Engine</div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header Bar -->
+            <header class="top-header">
+                <div class="page-title">
+                    <h1 id="current-tab-title">Executive Dashboard</h1>
+                    <p id="current-tab-subtitle">Real-time inventory intelligence and operational metrics</p>
+                </div>
+                <div class="header-actions">
+                    <div class="store-selector-wrapper">
+                        <label for="global-store-select">Store Filter:</label>
+                        <select id="global-store-select" class="form-select">
+                            <option value="all">All Stores (5)</option>
+                        </select>
+                    </div>
+                </div>
+            </header>
+
+            <!-- TAB 1: DASHBOARD -->
+            <section id="tab-dashboard" class="tab-view active">
+                <!-- KPI Metrics Grid -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Total Revenue (90d)</span>
+                            <span class="kpi-icon">💰</span>
+                        </div>
+                        <div class="kpi-value" id="kpi-revenue">$0.00</div>
+                        <div class="kpi-subtext" id="kpi-transactions">0 Transactions</div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Total Units Sold</span>
+                            <span class="kpi-icon">🏷️</span>
+                        </div>
+                        <div class="kpi-value" id="kpi-units">0</div>
+                        <div class="kpi-subtext">Across 40 Products</div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Inventory Valuation</span>
+                            <span class="kpi-icon">🏢</span>
+                        </div>
+                        <div class="kpi-value" id="kpi-valuation">$0.00</div>
+                        <div class="kpi-subtext" id="kpi-inv-units">0 Units in Stock</div>
+                    </div>
+
+                    <div class="kpi-card highlight-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Attention Required</span>
+                            <span class="kpi-icon">⚠️</span>
+                        </div>
+                        <div class="kpi-value" id="kpi-alerts-count">0</div>
+                        <div class="kpi-subtext" id="kpi-alerts-breakdown">Critical: 0 | Warning: 0</div>
+                    </div>
+                </div>
+
+                <!-- Attention Required Banner Carousel -->
+                <div class="panel attention-panel">
+                    <div class="panel-header">
+                        <h3>🚨 What Needs Your Attention Today?</h3>
+                        <span class="subtitle">Ranked operational priorities detected by rules engine</span>
+                    </div>
+                    <div id="attention-items-container" class="attention-grid">
+                        <div class="loading-spinner">Loading attention items...</div>
+                    </div>
+                </div>
+
+                <!-- Charts & Tables Grid -->
+                <div class="dashboard-grid">
+                    <!-- Daily Sales Trend SVG Chart -->
+                    <div class="panel chart-panel">
+                        <div class="panel-header">
+                            <h3>📈 30-Day Daily Sales Revenue Trend</h3>
+                        </div>
+                        <div id="sales-chart-container" class="chart-container">
+                            <!-- SVG Chart rendered by app.js -->
+                        </div>
+                    </div>
+
+                    <!-- Store Performance -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>🏪 Store Performance</h3>
+                        </div>
+                        <div id="store-performance-container" class="store-list">
+                            <!-- Store bars rendered by app.js -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Products Table -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3>⭐ Top 5 Performing Products</h3>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Category</th>
+                                    <th>Units Sold</th>
+                                    <th>Total Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody id="top-products-tbody">
+                                <!-- Rendered by app.js -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: INVENTORY -->
+            <section id="tab-inventory" class="tab-view">
+                <div class="filter-bar">
+                    <div class="search-box">
+                        <input type="text" id="inv-search-input" placeholder="Search product or category..." class="form-input">
+                    </div>
+                    <div class="filter-group">
+                        <select id="inv-filter-category" class="form-select">
+                            <option value="all">All Categories</option>
+                        </select>
+                        <select id="inv-filter-status" class="form-select">
+                            <option value="all">All Statuses</option>
+                            <option value="CRITICAL">Critical (<= 2 Days)</option>
+                            <option value="WARNING">Warning (<= 7 Days)</option>
+                            <option value="HEALTHY">Healthy</option>
+                            <option value="SLOW_MOVING">Slow Moving</option>
+                            <option value="OVERSTOCK">Overstock</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Category</th>
+                                    <th>Store</th>
+                                    <th>Stock</th>
+                                    <th>Avg Daily Sales</th>
+                                    <th>Days Left</th>
+                                    <th>Status</th>
+                                    <th>Recommended Reorder</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inventory-tbody">
+                                <!-- Rendered by app.js -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 3: SALES ANALYTICS -->
+            <section id="tab-sales" class="tab-view">
+                <div class="dashboard-grid">
+                    <!-- Spikes & Drops Panels -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>⚡ Recent Sales Spikes (>= +30%)</h3>
+                        </div>
+                        <div id="spikes-list-container" class="trend-card-list">
+                            <!-- Rendered by app.js -->
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>📉 Recent Sales Drops (<= -30%)</h3>
+                        </div>
+                        <div id="drops-list-container" class="trend-card-list">
+                            <!-- Rendered by app.js -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Category Breakdown -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3>🏷️ Category Performance</h3>
+                    </div>
+                    <div id="category-grid" class="category-grid">
+                        <!-- Rendered by app.js -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 4: AI COPILOT -->
+            <section id="tab-copilot" class="tab-view">
+                <div class="copilot-container">
+                    <!-- Suggested Questions Bar -->
+                    <div class="preset-prompts-bar">
+                        <span class="prompt-label">Quick Prompts:</span>
+                        <button class="prompt-pill" data-prompt="What needs my attention today?">🚨 What needs attention?</button>
+                        <button class="prompt-pill" data-prompt="Which products are running out?">⚠️ What is running out?</button>
+                        <button class="prompt-pill" data-prompt="What should I reorder?">🛒 What should I reorder?</button>
+                        <button class="prompt-pill" data-prompt="Which products are slow-moving?">🐢 Slow-moving products?</button>
+                        <button class="prompt-pill" data-prompt="How did laptops perform this month?">💻 Laptop performance?</button>
+                        <button class="prompt-pill" data-prompt="Why did laptop sales increase?">❓ Why did laptops increase?</button>
+                        <button class="prompt-pill" data-prompt="Which store performed best?">🏆 Best store?</button>
+                    </div>
+
+                    <!-- Chat Messages Output -->
+                    <div id="chat-messages-container" class="chat-messages">
+                        <!-- Default Welcome Message -->
+                        <div class="chat-message assistant-message">
+                            <div class="message-header">
+                                <span class="assistant-avatar">🤖</span>
+                                <span class="assistant-name">RetailIQ Evidence Copilot</span>
+                            </div>
+                            <div class="message-content">
+                                <p>Hello! I am your store copilot. I provide <strong>100% data-grounded</strong> explanations for inventory, stock-outs, sales trends, and store performance.</p>
+                                <p>Ask me any natural language question or click one of the quick prompt buttons above!</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chat Input Bar -->
+                    <form id="chat-form" class="chat-input-wrapper">
+                        <input type="text" id="chat-input" placeholder="Ask questions like 'What is running out?' or 'What should I reorder?'..." autocomplete="off">
+                        <button type="submit" id="chat-submit-btn" class="btn-primary">
+                            <span>Send Query</span> ➔
+                        </button>
+                    </form>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
