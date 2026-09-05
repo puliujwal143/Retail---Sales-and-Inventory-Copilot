@@ -465,8 +465,42 @@ def compare_stores_analytics(store_ids: List[str], time_days: int = 30, target_d
     """
     Compares selected stores side-by-side across revenue, units, growth, stock risks, and trend specs.
     """
+    from src.dataset_manager import ActiveDatasetManager
+    if ActiveDatasetManager.get_active_dataset_id() is None:
+        return {
+            "stores_count": 0,
+            "comparison_table": [],
+            "comparison_chart": {
+                "type": "line",
+                "title": "Store Revenue Trajectory",
+                "labels": [],
+                "datasets": []
+            },
+            "insights": []
+        }
+
+    all_db_stores = query_all("SELECT store_id FROM stores ORDER BY store_id")
+    available_ids = [s["store_id"] for s in all_db_stores]
+    
     if not store_ids or len(store_ids) == 0:
-        store_ids = ["STR001", "STR002", "STR003"]
+        store_ids = available_ids[:min(5, len(available_ids))]
+    else:
+        # Filter to existing store_ids or fallback
+        valid_ids = [s for s in store_ids if s in available_ids]
+        store_ids = valid_ids if valid_ids else available_ids[:min(5, len(available_ids))]
+    
+    if not store_ids:
+        return {
+            "stores_count": 0,
+            "comparison_table": [],
+            "comparison_chart": {
+                "type": "line",
+                "title": "Store Revenue Trajectory",
+                "labels": [],
+                "datasets": []
+            },
+            "insights": []
+        }
 
     date_filter = ""
     params = [time_days]
@@ -579,7 +613,7 @@ def compare_stores_analytics(store_ids: List[str], time_days: int = 30, target_d
 
 def get_yearly_performance(store_id: Optional[str] = "all") -> Dict[str, Any]:
     """
-    Computes 10-year yearly sales performance breakdown, YoY growth %, and highlights.
+    Computes yearly sales performance breakdown, YoY growth %, and highlights dynamically based on active dataset.
     """
     resolved_store = resolve_store_id(store_id)
     where_parts = []
@@ -603,7 +637,7 @@ def get_yearly_performance(store_id: Optional[str] = "all") -> Dict[str, Any]:
     """
     rows = query_all(sql, tuple(params))
     if not rows:
-        return {"yearly_table": [], "best_year": "N/A", "fastest_growth_year": "N/A", "lowest_year": "N/A", "yearly_chart": {"type": "bar", "title": "10-Year Revenue by Year", "labels": [], "datasets": [{"label": "Annual Revenue (₹)", "data": [], "color": "#087F80"}]}}
+        return {"yearly_table": [], "best_year": "N/A", "fastest_growth_year": "N/A", "lowest_year": "N/A", "yearly_chart": {"type": "bar", "title": "Annual Revenue by Year", "labels": [], "datasets": [{"label": "Annual Revenue (₹)", "data": [], "color": "#087F80"}]}}
 
     yearly_data = []
     prev_rev = None
@@ -631,6 +665,11 @@ def get_yearly_performance(store_id: Optional[str] = "all") -> Dict[str, Any]:
     revs = [y["total_revenue"] for y in yearly_data]
     growth_rates = [y["yoy_revenue_growth"] for y in yearly_data]
 
+    if len(years) > 1:
+        chart_title = f"Annual Revenue by Year ({years[0]} - {years[-1]})"
+    else:
+        chart_title = f"Annual Revenue ({years[0]})"
+
     return {
         "yearly_table": yearly_data,
         "best_year": best_year,
@@ -638,7 +677,7 @@ def get_yearly_performance(store_id: Optional[str] = "all") -> Dict[str, Any]:
         "lowest_year": lowest_year,
         "yearly_chart": {
             "type": "bar",
-            "title": "10-Year Revenue by Year (2016 - 2026)",
+            "title": chart_title,
             "labels": years,
             "datasets": [{"label": "Annual Revenue (₹)", "data": revs, "color": "#087F80"}]
         },
@@ -652,7 +691,7 @@ def get_yearly_performance(store_id: Optional[str] = "all") -> Dict[str, Any]:
 
 def get_seasonality_analysis(store_id: Optional[str] = "all") -> Dict[str, Any]:
     """
-    Computes average monthly revenue and units across all 10 years to identify seasonal demand spikes.
+    Computes average monthly revenue and units across all recorded periods in active dataset.
     """
     resolved_store = resolve_store_id(store_id)
     where_parts = []
@@ -694,13 +733,26 @@ def get_seasonality_analysis(store_id: Optional[str] = "all") -> Dict[str, Any]:
         labels.append(m_name)
         avg_revs.append(r["avg_revenue"])
 
+    if len(labels) == 12:
+        title = "Monthly Demand Seasonality Profile (Jan - Dec)"
+        subtitle = "Average monthly revenue across recorded years"
+    elif len(labels) > 1:
+        title = f"Monthly Demand Distribution ({labels[0]} - {labels[-1]})"
+        subtitle = f"Monthly revenue across {len(labels)} recorded months"
+    elif len(labels) == 1:
+        title = f"Monthly Demand Profile ({labels[0]})"
+        subtitle = f"Monthly revenue for {labels[0]}"
+    else:
+        title = "Monthly Demand Seasonality Profile"
+        subtitle = "No monthly data available"
+
     return {
         "seasonality_table": rows,
-        "peak_month": max(rows, key=lambda x: x["avg_revenue"])["month_name"] if rows else "Dec",
+        "peak_month": max(rows, key=lambda x: x["avg_revenue"])["month_name"] if rows else "N/A",
         "seasonality_chart": {
             "type": "bar",
-            "title": "Monthly Demand Seasonality Profile (Jan - Dec)",
-            "subtitle": "Average monthly revenue across 10 years",
+            "title": title,
+            "subtitle": subtitle,
             "labels": labels,
             "datasets": [{"label": "Avg Monthly Revenue (₹)", "data": avg_revs, "color": "#D97706"}]
         }

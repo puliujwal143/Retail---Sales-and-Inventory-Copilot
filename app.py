@@ -1,9 +1,11 @@
 import os
+import io
 import sys
 import math
 import numpy as np
+import pandas as pd
 import uvicorn
-from fastapi import FastAPI, Query, HTTPException, Request
+from fastapi import FastAPI, Query, HTTPException, Request, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -13,6 +15,7 @@ from typing import Optional, List, Dict, Any
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.database import init_db, query_all, query_one
+from src.dataset_manager import ActiveDatasetManager, create_and_activate_dataset, validate_and_profile_retail_data
 from src.analytics import get_dashboard_summary
 from src.inventory_rules import get_inventory_status_df, get_low_stock_items, get_slow_moving_items, get_overstocked_items, TARGET_COVERAGE_DAYS
 from src.sales_rules import get_product_sales_trends, get_sales_spikes, get_sales_drops, get_store_performance, get_category_performance, get_daily_sales_trend, get_yearly_performance, get_seasonality_analysis, get_sales_analytics_charts
@@ -42,6 +45,250 @@ class ChatRequest(BaseModel):
     question: str
     store_id: Optional[str] = "all"
     target_date: Optional[str] = None
+
+class DatasetActivateRequest(BaseModel):
+    dataset_id: str
+
+# DATASET MANAGEMENT API ENDPOINTS
+@app.get("/api/datasets")
+def api_list_datasets():
+    """Returns list of all available datasets with metadata and active status."""
+    try:
+        return {
+            "active_dataset": ActiveDatasetManager.get_active_dataset(),
+            "datasets": ActiveDatasetManager.list_datasets()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/datasets/active")
+def api_get_active_dataset():
+    """Returns currently active dataset metadata."""
+    try:
+        return ActiveDatasetManager.get_active_dataset()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/datasets/activate")
+def api_activate_dataset(req: DatasetActivateRequest):
+    """Switches the active dataset live in memory and resets analytics cache."""
+    try:
+        updated = ActiveDatasetManager.activate_dataset(req.dataset_id)
+        return {
+            "success": True,
+            "message": f"Dataset '{updated.get('dataset_name')}' is now active.",
+            "dataset": updated
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/datasets/reset")
+def api_reset_dataset():
+    """Resets the active dataset back to the Demo Retail Dataset."""
+    try:
+        updated = ActiveDatasetManager.reset_to_demo()
+        return {
+            "success": True,
+            "message": "Reset to Demo Retail Dataset successfully.",
+            "dataset": updated
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/datasets/clear")
+def api_clear_dataset():
+    """Clears the active dataset, returning the application to the NO_DATA empty state."""
+    try:
+        updated = ActiveDatasetManager.clear_active_dataset()
+        return {
+            "success": True,
+            "message": "Active dataset cleared. Application is now in NO_DATA state.",
+            "dataset": updated
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/datasets/validate")
+async def api_validate_dataset(
+    file: Optional[UploadFile] = File(None),
+    sales_file: Optional[UploadFile] = File(None),
+    inventory_file: Optional[UploadFile] = File(None),
+    products_file: Optional[UploadFile] = File(None),
+    stores_file: Optional[UploadFile] = File(None)
+):
+    """
+    Dry-run file profiling and schema validation before dataset activation.
+    Detects column mapping, row counts, entity referential integrity, and data quality issues.
+    """
+    try:
+        sales_df = None
+        inv_df = None
+        prods_df = None
+        stores_df = None
+
+        if file is not None:
+            fname = file.filename.lower()
+            content = await file.read()
+            if fname.endswith(".xlsx") or fname.endswith(".xls"):
+                excel_file = pd.ExcelFile(io.BytesIO(content))
+                sales_sheet = next((s for s in excel_file.sheet_names if "sale" in s.lower() or "transaction" in s.lower()), None)
+                inv_sheet = next((s for s in excel_file.sheet_names if "inv" in s.lower() or "stock" in s.lower()), None)
+                prod_sheet = next((s for s in excel_file.sheet_names if "prod" in s.lower() or "item" in s.lower() or "sku" in s.lower()), None)
+                store_sheet = next((s for s in excel_file.sheet_names if "store" in s.lower() or "location" in s.lower()), None)
+
+                sales_df = pd.read_excel(io.BytesIO(content), sheet_name=sales_sheet if sales_sheet else 0)
+                if inv_sheet:
+                    inv_df = pd.read_excel(io.BytesIO(content), sheet_name=inv_sheet)
+                if prod_sheet:
+                    prods_df = pd.read_excel(io.BytesIO(content), sheet_name=prod_sheet)
+                if store_sheet:
+                    stores_df = pd.read_excel(io.BytesIO(content), sheet_name=store_sheet)
+            else:
+                sales_df = pd.read_csv(io.BytesIO(content))
+
+        if sales_file is not None:
+            content = await sales_file.read()
+            sales_df = pd.read_csv(io.BytesIO(content))
+
+        if inventory_file is not None:
+            content = await inventory_file.read()
+            inv_df = pd.read_csv(io.BytesIO(content))
+
+        if products_file is not None:
+            content = await products_file.read()
+            prods_df = pd.read_csv(io.BytesIO(content))
+
+        if stores_file is not None:
+            content = await stores_file.read()
+            stores_df = pd.read_csv(io.BytesIO(content))
+
+        report = validate_and_profile_retail_data(
+            sales_df=sales_df,
+            inventory_df=inv_df,
+            products_df=prods_df,
+            stores_df=stores_df
+        )
+
+        return report
+
+    except Exception as e:
+        return {
+            "is_valid": False,
+            "errors": [f"Validation parsing error: {str(e)}"],
+            "warnings": [],
+            "summary": {},
+            "column_mappings": {}
+        }
+
+@app.post("/api/datasets/upload")
+async def api_upload_dataset(
+    dataset_name: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    sales_file: Optional[UploadFile] = File(None),
+    inventory_file: Optional[UploadFile] = File(None),
+    products_file: Optional[UploadFile] = File(None),
+    stores_file: Optional[UploadFile] = File(None)
+):
+    """
+    Atomic Dataset Upload Pipeline:
+    Accepts single CSV/Excel file OR separate CSV files.
+    Validates, normalizes, stages in temporary SQLite, verifies integrity,
+    and atomically activates the new dataset.
+    Rolls back cleanly on any failure without touching previous active data.
+    """
+    try:
+        sales_df = None
+        inv_df = None
+        prods_df = None
+        stores_df = None
+
+        name = dataset_name.strip() if dataset_name and dataset_name.strip() else None
+
+        # Helper to read file bytes into pandas
+        def parse_file(uploaded: UploadFile) -> pd.DataFrame:
+            content = uploaded.file.read()
+            fname = uploaded.filename.lower()
+            if fname.endswith(".xlsx") or fname.endswith(".xls"):
+                return pd.read_excel(io.BytesIO(content))
+            else:
+                return pd.read_csv(io.BytesIO(content))
+
+        # Check if single multi-sheet Excel or single file uploaded
+        if file is not None:
+            fname = file.filename.lower()
+            name = name or file.filename.rsplit(".", 1)[0].replace("_", " ").title()
+            content = await file.read()
+
+            if fname.endswith(".xlsx") or fname.endswith(".xls"):
+                excel_file = pd.ExcelFile(io.BytesIO(content))
+                sheet_names = [s.lower().strip() for s in excel_file.sheet_names]
+                
+                # Check for named sheets
+                sales_sheet = next((s for s in excel_file.sheet_names if "sale" in s.lower() or "transaction" in s.lower()), None)
+                inv_sheet = next((s for s in excel_file.sheet_names if "inv" in s.lower() or "stock" in s.lower()), None)
+                prod_sheet = next((s for s in excel_file.sheet_names if "prod" in s.lower() or "item" in s.lower() or "sku" in s.lower()), None)
+                store_sheet = next((s for s in excel_file.sheet_names if "store" in s.lower() or "location" in s.lower()), None)
+
+                if sales_sheet:
+                    sales_df = pd.read_excel(io.BytesIO(content), sheet_name=sales_sheet)
+                else:
+                    sales_df = pd.read_excel(io.BytesIO(content), sheet_name=0)
+                
+                if inv_sheet:
+                    inv_df = pd.read_excel(io.BytesIO(content), sheet_name=inv_sheet)
+                if prod_sheet:
+                    prods_df = pd.read_excel(io.BytesIO(content), sheet_name=prod_sheet)
+                if store_sheet:
+                    stores_df = pd.read_excel(io.BytesIO(content), sheet_name=store_sheet)
+
+            else:
+                # Single CSV file
+                sales_df = pd.read_csv(io.BytesIO(content))
+
+        # Separate multi-file upload
+        if sales_file is not None:
+            content = await sales_file.read()
+            sales_df = pd.read_csv(io.BytesIO(content))
+            name = name or sales_file.filename.rsplit(".", 1)[0].replace("_", " ").title()
+
+        if inventory_file is not None:
+            content = await inventory_file.read()
+            inv_df = pd.read_csv(io.BytesIO(content))
+
+        if products_file is not None:
+            content = await products_file.read()
+            prods_df = pd.read_csv(io.BytesIO(content))
+
+        if stores_file is not None:
+            content = await stores_file.read()
+            stores_df = pd.read_csv(io.BytesIO(content))
+
+        if sales_df is None or sales_df.empty:
+            raise HTTPException(status_code=400, detail="No valid sales data found in uploaded file(s). Please provide a CSV or Excel file containing transaction/sales records.")
+
+        name = name or "Custom Retail Dataset"
+
+        # Execute atomic import & activation
+        metrics = create_and_activate_dataset(
+            dataset_name=name,
+            sales_df=sales_df,
+            inventory_df=inv_df,
+            products_df=prods_df,
+            stores_df=stores_df
+        )
+
+        return {
+            "success": True,
+            "message": f"Successfully activated dataset '{name}'! {metrics['store_count']} Stores, {metrics['product_count']} Products, {metrics['sales_count']:,} Sales records loaded.",
+            "dataset": metrics
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Import validation failed: {str(e)}")
 
 # API ENDPOINTS
 @app.get("/api/dashboard")
@@ -88,6 +335,7 @@ def api_reorder_plan(store_id: Optional[str] = "all", category: Optional[str] = 
         
         # Sort by reorder priority and units needed
         df = df.sort_values(by=["recommended_reorder", "days_remaining"], ascending=[False, True])
+        df = df.replace({np.nan: None})
         return df.to_dict(orient="records")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -203,6 +451,7 @@ def api_inventory(store_id: Optional[str] = "all", category: Optional[str] = "al
         df = get_inventory_status_df(store_id=store_id, category=category, target_date=date)
         if df.empty:
             return []
+        df = df.replace({np.nan: None})
         return df.to_dict(orient="records")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -362,6 +611,56 @@ def api_products():
 from src.query_planner import build_query_spec, CONVERSATION_MEMORY
 from src.analytics_engine import execute_query_spec
 from src.response_engine import format_copilot_payload
+
+@app.get("/api/debug/dataset")
+def api_debug_dataset():
+    """Development debug endpoint showing active dataset metadata and table stats (Requirement 20)."""
+    try:
+        active = ActiveDatasetManager.get_active_dataset()
+        db_path = ActiveDatasetManager.get_active_db_path()
+        return {
+            "active_dataset_id": active.get("dataset_id"),
+            "dataset_name": active.get("dataset_name"),
+            "is_demo": active.get("is_demo"),
+            "sales_row_count": active.get("sales_count"),
+            "product_count": active.get("product_count"),
+            "store_count": active.get("store_count"),
+            "inventory_row_count": active.get("inventory_count"),
+            "date_min": active.get("min_date"),
+            "date_max": active.get("max_date"),
+            "total_revenue": active.get("total_revenue"),
+            "total_units_sold": active.get("total_units_sold"),
+            "sqlite_file": db_path
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/debug/active-dataset")
+def api_debug_active_dataset():
+    """Returns active dataset profiling metadata and resolved latest date."""
+    try:
+        from src.dataset_manager import get_active_dataset_metadata, get_active_dataset_id, get_active_dataset_latest_date
+        meta = get_active_dataset_metadata() or {}
+        sales_bounds = query_one("SELECT COUNT(*) as cnt, MIN(date) as min_d, MAX(date) as max_d FROM sales") or {}
+        prod_cnt = query_one("SELECT COUNT(*) as cnt FROM products") or {}
+        store_cnt = query_one("SELECT COUNT(*) as cnt FROM stores") or {}
+        inv_bounds = query_one("SELECT COUNT(*) as cnt, MIN(last_restock_date) as min_d, MAX(last_restock_date) as max_d FROM inventory") or {}
+        
+        return {
+            "dataset_id": get_active_dataset_id(),
+            "dataset_name": meta.get("dataset_name", "Unknown"),
+            "products_count": prod_cnt.get("cnt", 0),
+            "stores_count": store_cnt.get("cnt", 0),
+            "sales_count": sales_bounds.get("cnt", 0),
+            "inventory_count": inv_bounds.get("cnt", 0),
+            "sales_min_date": sales_bounds.get("min_d", "N/A"),
+            "sales_max_date": sales_bounds.get("max_d", "N/A"),
+            "inventory_min_date": inv_bounds.get("min_d", "N/A"),
+            "inventory_max_date": inv_bounds.get("max_d", "N/A"),
+            "active_latest_date": get_active_dataset_latest_date()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/debug/query")
 def api_debug_query(question: str, store_id: Optional[str] = "all", target_date: Optional[str] = None):

@@ -272,18 +272,20 @@ input, select, button, textarea {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 24px;
+    padding: 8px 18px;
     border-bottom: 1px solid var(--border-color);
     background-color: #FFFFFF;
-    height: 60px;
+    height: 54px;
     flex-shrink: 0;
+    gap: 12px;
 }
 
 .search-input-wrapper {
     position: relative;
     display: flex;
     align-items: center;
-    width: 320px;
+    width: 240px;
+    flex-shrink: 1;
 }
 
 .search-input-wrapper .search-icon {
@@ -297,14 +299,14 @@ input, select, button, textarea {
 /* Global Form Controls Styling */
 .form-input, .search-input {
     width: 100%;
-    padding: 7px 12px 7px 32px;
+    padding: 6px 10px 6px 30px;
     background-color: #FFFFFF;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     font-size: 12px;
     color: var(--text-primary);
     outline: none;
-    height: 36px;
+    height: 34px;
     transition: all 0.15s ease;
 }
 
@@ -317,19 +319,19 @@ input, select, button, textarea {
     background-color: #FFFFFF;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    padding: 6px 28px 6px 12px;
-    font-size: 12px;
+    padding: 4px 24px 4px 10px;
+    font-size: 11px;
     font-weight: 500;
     color: var(--text-primary);
     outline: none;
-    height: 36px;
+    height: 34px;
     cursor: pointer;
     appearance: none;
     -webkit-appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
     background-repeat: no-repeat;
-    background-position: right 10px center;
-    background-size: 12px;
+    background-position: right 8px center;
+    background-size: 10px;
 }
 
 .form-select:focus {
@@ -339,7 +341,9 @@ input, select, button, textarea {
 .header-right {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 8px;
+    flex-shrink: 0;
+    flex-wrap: nowrap;
 }
 
 .header-notification-btn {
@@ -1297,4 +1301,396 @@ input, select, button, textarea {
     display: block;
 }
 
+/* ==========================================================================
+   ACTIVE DATASET PILL & DATASET MANAGER STYLES (PS03)
+   ========================================================================== */
 
+.active-dataset-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: #FFFFFF;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    height: 34px;
+    white-space: nowrap;
+    font-size: 11px;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+.active-dataset-pill:hover {
+    border-color: var(--brand-teal);
+    background-color: var(--brand-teal-bg);
+}
+
+.dataset-pill-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background-color: var(--status-success);
+    flex-shrink: 0;
+}
+
+.dataset-pill-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    white-space: nowrap;
+    color: var(--text-primary);
+}
+
+.pill-divider {
+    color: var(--text-dim);
+    font-size: 10px;
+}
+
+.dataset-pill-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    background-color: #E0E7FF;
+    color: #3730A3;
+    border-radius: 4px;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+#header-btn-upload-data {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 12px;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+    background: var(--brand-teal);
+    color: #FFFFFF;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(8, 127, 128, 0.2);
+    transition: background 0.15s ease;
+    flex-shrink: 0;
+    box-sizing: border-box;
+}
+
+#header-btn-upload-data:hover {
+    background: var(--brand-teal-hover);
+}
+
+/* Dataset Manager Modal */
+.dataset-modal-card {
+    max-width: 780px !important;
+    width: 90% !important;
+}
+
+.dataset-modal-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    background-color: #F8FAFC;
+    padding: 0 20px;
+}
+
+.d-tab-btn {
+    padding: 12px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.d-tab-btn.active {
+    color: var(--brand-teal);
+    border-bottom-color: var(--brand-teal);
+    background-color: #FFFFFF;
+}
+
+.dtab-content {
+    display: none;
+}
+
+.dtab-content.active {
+    display: block;
+}
+
+/* Datasets Grid */
+.datasets-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 380px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.dataset-card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    background-color: #FFFFFF;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s ease;
+}
+
+.dataset-card.active-ds {
+    border-color: var(--brand-teal);
+    background-color: #F0FDF4;
+    box-shadow: 0 2px 6px rgba(8, 127, 128, 0.08);
+}
+
+.dataset-card-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.dataset-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dataset-card-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.dataset-card-metrics {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.dataset-card-metrics span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Upload Dropzone */
+.upload-dropzone {
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 30px 20px;
+    text-align: center;
+    background-color: #F8FAFC;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.upload-dropzone:hover, .upload-dropzone.dragover {
+    border-color: var(--brand-teal);
+    background-color: #F0FDFA;
+}
+
+.dropzone-icon {
+    font-size: 36px;
+    margin-bottom: 8px;
+}
+
+.dropzone-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.dropzone-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.file-chosen-text {
+    margin-top: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--brand-teal);
+}
+
+.multi-upload-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.multi-drop-card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    background-color: #F8FAFC;
+}
+
+.multi-drop-card .file-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.dataset-helper-box {
+    background-color: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    margin-top: 14px;
+}
+
+.dataset-progress-box {
+    background-color: #F0FDF4;
+    border: 1px solid #BBF7D0;
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    margin-top: 14px;
+}
+
+.progress-bar-track {
+    width: 100%;
+    height: 8px;
+    background-color: #E2E8F0;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    width: 0%;
+    background-color: var(--brand-teal);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.progress-step-text {
+    font-size: 12px;
+    font-weight: 600;
+    color: #166534;
+    text-align: center;
+}
+
+.alert-box {
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.alert-error {
+    background-color: #FEF2F2;
+    border: 1px solid #FECACA;
+    color: #991B1B;
+}
+
+/* Data Management View Specifics */
+.dataset-stats-chips-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.stat-chip {
+    background-color: #FFFFFF;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-chip .chip-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+}
+
+.stat-chip .chip-val {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-top: 2px;
+}
+
+.datasets-vertical-list .dataset-card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    background: #FFFFFF;
+    transition: all 0.2s ease;
+}
+
+.datasets-vertical-list .dataset-card.active-card {
+    border-color: var(--brand-teal);
+    background-color: var(--brand-teal-bg);
+}
+
+.val-counts-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+.val-count-item {
+    background: #FFFFFF;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 6px 8px;
+    text-align: center;
+}
+
+.val-count-item .vc-label {
+    display: block;
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.val-count-item .vc-val {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.mapping-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 6px;
+}
+
+.mapping-table th, .mapping-table td {
+    padding: 4px 8px;
+    border: 1px solid var(--border-color);
+    text-align: left;
+    font-size: 11px;
+}
+
+.mapping-table th {
+    background: #F1F5F9;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.val-notes-list {
+    margin-top: 8px;
+    padding-left: 16px;
+}
+
+.val-notes-list li {
+    margin-bottom: 2px;
+}

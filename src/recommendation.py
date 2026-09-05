@@ -8,11 +8,17 @@ from src.inventory_rules import (
 )
 from src.sales_rules import get_sales_spikes, get_sales_drops
 
+from src.dataset_manager import ActiveDatasetManager
+
 def get_attention_items() -> List[Dict[str, Any]]:
     """
     Attention Engine: Collects critical stock risks, slow-moving items, overstock,
     sales spikes, and sales drops, ranking them by severity.
+    Returns empty list when no dataset is active.
     """
+    if ActiveDatasetManager.get_active_dataset_id() is None:
+        return []
+
     attention_list = []
 
     # 1. Critical & Out of Stock (HIGH Severity)

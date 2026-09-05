@@ -36,6 +36,7 @@ def format_copilot_payload(spec: Dict[str, Any], analytics_result: Dict[str, Any
     raw_payload = {
         "intent": analytics_result.get("intent", spec.get("intent", "SALES_SUMMARY")),
         "user_query": spec.get("raw_question", ""),
+        "grounding_state": analytics_result.get("grounding_state") or spec.get("grounding_state", "DATA_FOUND"),
         "data_scope": analytics_result.get("data_scope", "Date Scope: Full Dataset • Scope: All Stores"),
         "data_sufficiency": analytics_result.get("data_sufficiency", "sufficient"),
         "context_summary": analytics_result.get("context_summary", ""),

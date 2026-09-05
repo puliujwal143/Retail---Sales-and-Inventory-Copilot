@@ -51,7 +51,30 @@ def generate_copilot_response(processed_query: Dict[str, Any]) -> Dict[str, Any]
     """
     Sends structured query payload to Gemini for natural-language explanation.
     Falls back gracefully to deterministic python response if Gemini key is absent or request fails.
+    Strictly prevents hallucination for NO_DATA grounding states.
     """
+    grounding_state = processed_query.get("grounding_state", "DATA_FOUND")
+    context_summary = processed_query.get("context_summary", "")
+    data_scope = processed_query.get("data_scope", "")
+    assumptions = processed_query.get("assumptions", [])
+    recommendations = processed_query.get("recommendations", [])
+
+    # If NO_DATA state is flagged, return grounded response directly without hallucination risk
+    if grounding_state == "NO_DATA":
+        ans = processed_query.get("answer") or context_summary or "I don't have an active retail dataset yet. Please upload your sales and inventory data before I can answer this."
+        return {
+            "intent": processed_query.get("intent", "SALES_SUMMARY"),
+            "grounding_state": "NO_DATA",
+            "answer": ans,
+            "data_scope": data_scope,
+            "key_metrics": [],
+            "recommendations": recommendations,
+            "evidence": [],
+            "assumptions": assumptions,
+            "data_sufficiency": "insufficient",
+            "chart": None
+        }
+
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
 
     # If API key missing, immediately return deterministic fallback
@@ -62,13 +85,9 @@ def generate_copilot_response(processed_query: Dict[str, Any]) -> Dict[str, Any]
     # Prepare prompt context
     user_query = processed_query.get("user_query", "")
     intent = processed_query.get("intent", "")
-    data_scope = processed_query.get("data_scope", "")
     data_sufficiency = processed_query.get("data_sufficiency", "sufficient")
-    context_summary = processed_query.get("context_summary", "")
     evidence = processed_query.get("evidence", [])
-    assumptions = processed_query.get("assumptions", [])
     metrics = processed_query.get("metrics", [])
-    recommendations = processed_query.get("recommendations", [])
     chart = processed_query.get("chart", None)
 
     structured_ev = processed_query.get("structured_evidence", {})
@@ -76,6 +95,7 @@ def generate_copilot_response(processed_query: Dict[str, Any]) -> Dict[str, Any]
     prompt_content = f"""USER QUESTION: "{user_query}"
 
 CLASSIFIED INTENT: {intent}
+GROUNDING STATE: {grounding_state}
 DATA SCOPE: {data_scope}
 SYSTEM DATA SUFFICIENCY: {data_sufficiency}
 ANALYTICS SUMMARY: {context_summary}
@@ -98,7 +118,7 @@ SYSTEM ASSUMPTIONS:
 SUPPLIED DETERMINISTIC RECOMMENDATIONS:
 {json.dumps(recommendations, indent=2)}
 
-Remember: Respond ONLY with valid JSON following the schema. Directly answer the user's question first. Ground every statement in supplied numbers. If data sufficiency is 'insufficient', explicitly state what the data DOES show, what is UNKNOWN, and present hypotheses only as hypotheses, NOT facts.
+Remember: Respond ONLY with valid JSON following the schema. Directly answer the user's question first. Ground every statement in supplied numbers. NEVER substitute dataset totals when a specific entity was requested. If data sufficiency is 'insufficient', explicitly state what the data DOES show, what is UNKNOWN, and present hypotheses only as hypotheses, NOT facts.
 """
 
     # Attempt to call Gemini via google-genai SDK
@@ -140,6 +160,7 @@ Remember: Respond ONLY with valid JSON following the schema. Directly answer the
             parsed_json.setdefault("evidence", evidence)
             parsed_json["data_scope"] = data_scope
             parsed_json["intent"] = intent
+            parsed_json["grounding_state"] = grounding_state
             parsed_json["chart"] = chart
             return parsed_json
         else:
@@ -169,10 +190,11 @@ def clean_and_parse_json(text: str) -> Dict[str, Any]:
 def create_deterministic_fallback(processed_query: Dict[str, Any], note: str = "") -> Dict[str, Any]:
     """
     Generates a 100% reliable, data-grounded answer when Gemini API is unavailable or returns invalid format.
-    Ensures app NEVER crashes.
+    Ensures app NEVER crashes or invents numbers.
     """
     user_query = processed_query.get("user_query", "")
     intent = processed_query.get("intent", "")
+    grounding_state = processed_query.get("grounding_state", "DATA_FOUND")
     data_scope = processed_query.get("data_scope", "")
     data_sufficiency = processed_query.get("data_sufficiency", "sufficient")
     context_summary = processed_query.get("context_summary", "")
@@ -182,9 +204,21 @@ def create_deterministic_fallback(processed_query: Dict[str, Any], note: str = "
     recommendations = processed_query.get("recommendations", [])
     chart = processed_query.get("chart", None)
 
-    if processed_query.get("is_out_of_bounds") or "No sales records exist" in context_summary or "NO DATA" in context_summary:
-        answer = context_summary
-    elif data_sufficiency == "insufficient":
+    if grounding_state == "NO_DATA" or processed_query.get("is_out_of_bounds") or "not found in the current dataset" in context_summary.lower() or "No sales records exist" in context_summary or "NO DATA" in context_summary:
+        return {
+            "intent": intent,
+            "grounding_state": "NO_DATA",
+            "answer": context_summary,
+            "data_scope": data_scope,
+            "key_metrics": [],
+            "recommendations": recommendations,
+            "evidence": [],
+            "assumptions": assumptions,
+            "data_sufficiency": "insufficient",
+            "chart": None
+        }
+
+    if data_sufficiency == "insufficient":
         answer = (
             f"Regarding '{user_query}': {context_summary} "
             f"The dataset contains sales transaction history and inventory stock levels, but does NOT contain "
@@ -200,6 +234,7 @@ def create_deterministic_fallback(processed_query: Dict[str, Any], note: str = "
 
     return {
         "intent": intent,
+        "grounding_state": grounding_state,
         "answer": answer,
         "data_scope": data_scope,
         "key_metrics": metrics,

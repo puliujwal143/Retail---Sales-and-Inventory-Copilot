@@ -12,6 +12,11 @@ class QueryContext:
     intent: str
     metric: str = "revenue"
     entity_type: str = "ALL_PRODUCTS"
+    grounding_state: str = "DATA_FOUND"  # DATA_FOUND, NO_DATA, PARTIAL_DATA, INVALID_QUERY
+    unresolved_entities: List[Dict[str, Any]] = field(default_factory=list)
+    missing_reason: Optional[str] = None
+    suggested_actions: List[str] = field(default_factory=list)
+    parsed_entities: Dict[str, Any] = field(default_factory=dict)
     matched_products: List[Dict[str, Any]] = field(default_factory=list)
     excluded_accessories: List[Dict[str, Any]] = field(default_factory=list)
     product_family: Optional[str] = None
@@ -34,6 +39,11 @@ class QueryContext:
             "intent": self.intent,
             "metric": self.metric,
             "entity_type": self.entity_type,
+            "grounding_state": self.grounding_state,
+            "unresolved_entities": self.unresolved_entities,
+            "missing_reason": self.missing_reason,
+            "suggested_actions": self.suggested_actions,
+            "parsed_entities": self.parsed_entities,
             "matched_products": self.matched_products,
             "excluded_accessories": self.excluded_accessories,
             "product_family": self.product_family,

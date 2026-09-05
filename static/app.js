@@ -36,7 +36,10 @@ document.addEventListener("DOMContentLoaded", () => {
         setupProductModal();
         setupReorderPlanner();
         setupStoreComparison();
+        setupDatasetManagerModal();
+        setupDataManagementPage();
 
+        await loadActiveDatasetHeader();
         await loadStores();
         await loadAllViews();
     }
@@ -49,6 +52,807 @@ document.addEventListener("DOMContentLoaded", () => {
         await loadDecisionCenter();
         await loadStoreComparison();
         await loadExecutiveReport();
+        await loadDataManagementView();
+    }
+
+    // =========================================================================
+    // ACTIVE DATASET MANAGEMENT & DYNAMIC STATE SYNC
+    // =========================================================================
+
+    async function loadActiveDatasetHeader() {
+        try {
+            const res = await fetch("/api/datasets/active");
+            if (!res.ok) return;
+            const active = await res.json();
+            
+            const pillName = document.getElementById("pill-dataset-name");
+            const pillStats = document.getElementById("pill-dataset-stats");
+            const pillBadge = document.getElementById("pill-dataset-badge");
+
+            if (!active.dataset_id || active.status === "NO_DATA") {
+                if (pillName) pillName.textContent = "No Dataset Active";
+                if (pillStats) pillStats.textContent = "Not Connected";
+                if (pillBadge) {
+                    pillBadge.textContent = "NO DATA";
+                    pillBadge.style.backgroundColor = "#FEE2E2";
+                    pillBadge.style.color = "#991B1B";
+                }
+            } else {
+                if (pillName) pillName.textContent = active.dataset_name || "Active Dataset";
+                if (pillStats) {
+                    pillStats.textContent = `${active.store_count} Stores, ${active.product_count} SKUs`;
+                }
+                if (pillBadge) {
+                    pillBadge.textContent = active.is_demo ? "DEMO" : "ACTIVE";
+                    pillBadge.style.backgroundColor = active.is_demo ? "#E0E7FF" : "#DCFCE7";
+                    pillBadge.style.color = active.is_demo ? "#3730A3" : "#166534";
+                }
+            }
+        } catch (e) {
+            console.error("Error loading active dataset header:", e);
+        }
+    }
+
+    async function loadStores() {
+        try {
+            const res = await fetch("/api/stores");
+            if (!res.ok) return;
+            const stores = await res.json();
+            state.storesData = stores;
+
+            // Populate globalStoreSelect
+            if (globalStoreSelect) {
+                const cur = state.selectedStore;
+                globalStoreSelect.innerHTML = `<option value="all">All Stores (${stores.length})</option>` + 
+                    stores.map(s => `<option value="${s.store_id}">${s.store_name}</option>`).join("");
+                if (stores.some(s => s.store_id === cur)) {
+                    globalStoreSelect.value = cur;
+                } else {
+                    state.selectedStore = "all";
+                    globalStoreSelect.value = "all";
+                }
+            }
+
+            // Populate sales-store-select
+            const salesStoreSelect = document.getElementById("sales-store-select");
+            if (salesStoreSelect) {
+                salesStoreSelect.innerHTML = `<option value="all">All Stores (${stores.length})</option>` + 
+                    stores.map(s => `<option value="${s.store_id}">${s.store_name}</option>`).join("");
+                salesStoreSelect.value = state.selectedStore;
+            }
+
+            // Update compare checkboxes
+            state.compareSelectedStores = stores.slice(0, Math.min(3, stores.length)).map(s => s.store_id);
+            setupStoreComparison();
+        } catch (e) {
+            console.error("Error loading stores:", e);
+        }
+    }
+
+    function setupDatasetManagerModal() {
+        const modal = document.getElementById("dataset-manager-modal");
+        const closeBtn = document.getElementById("dataset-modal-close-btn");
+        const cancelBtn = document.getElementById("btn-cancel-upload");
+        const triggerPill = document.getElementById("header-dataset-pill");
+        const navTrigger = document.getElementById("nav-btn-dataset-manager");
+        const quickResetBtn = document.getElementById("btn-quick-reset-demo");
+        const dTabBtns = document.querySelectorAll(".d-tab-btn");
+        const uploadForm = document.getElementById("dataset-upload-form");
+        const singleFileInput = document.getElementById("single-file-input");
+        const singleFileChosen = document.getElementById("single-file-chosen");
+        const singleDropzone = document.getElementById("single-upload-zone");
+        const uploadModeRadios = document.querySelectorAll("input[name='upload-mode']");
+        const singleZone = document.getElementById("single-upload-zone");
+        const multiZone = document.getElementById("multi-upload-zone");
+        const errorAlert = document.getElementById("upload-error-alert");
+        const progressBox = document.getElementById("dataset-upload-progress");
+        const progressFill = document.getElementById("upload-progress-fill");
+        const stepText = document.getElementById("upload-step-text");
+
+        const openModal = async () => {
+            if (!modal) return;
+            modal.classList.remove("hidden");
+            if (errorAlert) errorAlert.classList.add("hidden");
+            if (progressBox) progressBox.classList.add("hidden");
+            await loadDatasetsList();
+        };
+
+        const closeModal = () => {
+            if (modal) modal.classList.add("hidden");
+        };
+
+        if (triggerPill) {
+            triggerPill.addEventListener("click", () => {
+                switchToTab("data-management");
+            });
+        }
+        if (navTrigger) navTrigger.addEventListener("click", openModal);
+        if (closeBtn) closeBtn.addEventListener("click", closeModal);
+        if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
+        
+        if (modal) {
+            modal.addEventListener("click", (e) => {
+                if (e.target === modal) closeModal();
+            });
+        }
+
+        // Tab switching in modal
+        dTabBtns.forEach(btn => {
+            btn.addEventListener("click", () => {
+                dTabBtns.forEach(b => b.classList.remove("active"));
+                document.querySelectorAll(".dtab-content").forEach(c => c.classList.remove("active"));
+                btn.classList.add("active");
+                const target = btn.getAttribute("data-dtab");
+                const targetEl = document.getElementById(target);
+                if (targetEl) targetEl.classList.add("active");
+                if (errorAlert) errorAlert.classList.add("hidden");
+            });
+        });
+
+        // Reset to Demo button
+        if (quickResetBtn) {
+            quickResetBtn.addEventListener("click", async () => {
+                try {
+                    const res = await fetch("/api/datasets/reset", { method: "POST" });
+                    if (!res.ok) throw new Error("Failed to reset dataset");
+                    await onDatasetChanged();
+                    closeModal();
+                } catch (err) {
+                    alert("Error resetting dataset: " + err.message);
+                }
+            });
+        }
+
+        // Upload mode radio toggle
+        uploadModeRadios.forEach(radio => {
+            radio.addEventListener("change", (e) => {
+                if (e.target.value === "single") {
+                    if (singleZone) singleZone.classList.remove("hidden");
+                    if (multiZone) multiZone.classList.add("hidden");
+                } else {
+                    if (singleZone) singleZone.classList.add("hidden");
+                    if (multiZone) multiZone.classList.remove("hidden");
+                }
+            });
+        });
+
+        // Single File Input change
+        if (singleFileInput) {
+            singleFileInput.addEventListener("change", () => {
+                if (singleFileInput.files && singleFileInput.files[0]) {
+                    const file = singleFileInput.files[0];
+                    if (singleFileChosen) singleFileChosen.textContent = `Selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                    const nameInput = document.getElementById("upload-dataset-name");
+                    if (nameInput && !nameInput.value.trim()) {
+                        nameInput.value = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+                    }
+                }
+            });
+        }
+
+        // Drag and drop for single dropzone
+        if (singleDropzone) {
+            ["dragenter", "dragover"].forEach(eventName => {
+                singleDropzone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    singleDropzone.classList.add("dragover");
+                }, false);
+            });
+            ["dragleave", "drop"].forEach(eventName => {
+                singleDropzone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    singleDropzone.classList.remove("dragover");
+                }, false);
+            });
+            singleDropzone.addEventListener("drop", (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files && files.length > 0) {
+                    singleFileInput.files = files;
+                    const file = files[0];
+                    if (singleFileChosen) singleFileChosen.textContent = `Selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                    const nameInput = document.getElementById("upload-dataset-name");
+                    if (nameInput && !nameInput.value.trim()) {
+                        nameInput.value = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+                    }
+                }
+            });
+        }
+
+        // Upload Form Submit
+        if (uploadForm) {
+            uploadForm.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                if (errorAlert) errorAlert.classList.add("hidden");
+
+                const mode = document.querySelector("input[name='upload-mode']:checked")?.value || "single";
+                const datasetName = document.getElementById("upload-dataset-name")?.value || "";
+
+                const formData = new FormData();
+                formData.append("dataset_name", datasetName);
+
+                if (mode === "single") {
+                    const f = singleFileInput?.files?.[0];
+                    if (!f) {
+                        if (errorAlert) {
+                            errorAlert.textContent = "Please select a CSV or Excel file to upload.";
+                            errorAlert.classList.remove("hidden");
+                        }
+                        return;
+                    }
+                    formData.append("file", f);
+                } else {
+                    const salesF = document.getElementById("multi-sales-file")?.files?.[0];
+                    const invF = document.getElementById("multi-inv-file")?.files?.[0];
+                    const prodsF = document.getElementById("multi-prods-file")?.files?.[0];
+                    const storesF = document.getElementById("multi-stores-file")?.files?.[0];
+
+                    if (!salesF) {
+                        if (errorAlert) {
+                            errorAlert.textContent = "Sales transactions CSV is required.";
+                            errorAlert.classList.remove("hidden");
+                        }
+                        return;
+                    }
+                    formData.append("sales_file", salesF);
+                    if (invF) formData.append("inventory_file", invF);
+                    if (prodsF) formData.append("products_file", prodsF);
+                    if (storesF) formData.append("stores_file", storesF);
+                }
+
+                // Show Multi-Step Loading Progress Bar (Requirement 35)
+                if (progressBox) progressBox.classList.remove("hidden");
+                const setStep = (pct, text) => {
+                    if (progressFill) progressFill.style.width = pct + "%";
+                    if (stepText) stepText.textContent = text;
+                };
+
+                setStep(20, "Importing dataset files...");
+                await new Promise(r => setTimeout(r, 250));
+                setStep(45, "Validating schema & normalizing data...");
+                await new Promise(r => setTimeout(r, 250));
+                setStep(70, "Building isolated relational retail model...");
+                await new Promise(r => setTimeout(r, 200));
+
+                try {
+                    const res = await fetch("/api/datasets/upload", {
+                        method: "POST",
+                        body: formData
+                    });
+
+                    const data = await res.json();
+                    if (!res.ok) {
+                        throw new Error(data.detail || "Dataset upload failed");
+                    }
+
+                    setStep(90, "Calculating deterministic analytics...");
+                    await new Promise(r => setTimeout(r, 250));
+                    setStep(100, "Ready ✓ Dataset activated successfully!");
+                    await new Promise(r => setTimeout(r, 400));
+
+                    await onDatasetChanged();
+                    closeModal();
+                } catch (err) {
+                    if (progressBox) progressBox.classList.add("hidden");
+                    if (errorAlert) {
+                        errorAlert.textContent = "Upload failed: " + err.message + " (Previous active dataset remained unchanged)";
+                        errorAlert.classList.remove("hidden");
+                    }
+                }
+            });
+        }
+    }
+
+    async function loadDatasetsList() {
+        const container = document.getElementById("datasets-list-container");
+        if (!container) return;
+
+        try {
+            container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted);">Loading datasets...</div>`;
+            const res = await fetch("/api/datasets");
+            if (!res.ok) throw new Error("Failed to fetch datasets");
+            const data = await res.json();
+            const activeDs = data.active_dataset;
+            const list = data.datasets || [];
+
+            if (list.length === 0) {
+                container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted);">No datasets available.</div>`;
+                return;
+            }
+
+            container.innerHTML = list.map(ds => {
+                const isActive = (ds.dataset_id === activeDs.dataset_id);
+                const salesStr = ds.sales_count >= 1000 ? (ds.sales_count / 1000).toFixed(1) + "K" : ds.sales_count;
+                const revStr = "₹" + Number(ds.total_revenue || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+
+                return `
+                    <div class="dataset-card ${isActive ? 'active-ds' : ''}">
+                        <div class="dataset-card-left">
+                            <div class="dataset-card-header">
+                                <span class="dataset-card-title">${ds.dataset_name}</span>
+                                ${isActive ? '<span class="badge badge-success">ACTIVE</span>' : (ds.is_demo ? '<span class="badge badge-secondary">DEMO</span>' : '<span class="badge badge-primary">CUSTOM</span>')}
+                            </div>
+                            <div class="dataset-card-metrics">
+                                <span>🏬 <strong>${ds.store_count}</strong> Stores</span>
+                                <span>📦 <strong>${ds.product_count}</strong> Products</span>
+                                <span>💳 <strong>${salesStr}</strong> Sales</span>
+                                <span>💰 <strong>${revStr}</strong> Rev</span>
+                                <span>📅 ${ds.min_date} → ${ds.max_date}</span>
+                            </div>
+                        </div>
+                        <div>
+                            ${isActive ? `
+                                <button class="btn-secondary" disabled style="opacity:0.6; cursor:default; font-size:12px; padding:6px 14px;">
+                                    ✓ Current Active
+                                </button>
+                            ` : `
+                                <button class="btn-primary btn-activate-ds" data-id="${ds.dataset_id}" style="font-size:12px; padding:6px 14px;">
+                                    Activate Dataset
+                                </button>
+                            `}
+                        </div>
+                    </div>
+                `;
+            }).join("");
+
+            // Attach activate event listeners
+            container.querySelectorAll(".btn-activate-ds").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const dsId = btn.getAttribute("data-id");
+                    btn.disabled = true;
+                    btn.textContent = "Activating...";
+                    try {
+                        const res = await fetch("/api/datasets/activate", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ dataset_id: dsId })
+                        });
+                        if (!res.ok) throw new Error("Failed to activate dataset");
+                        await onDatasetChanged();
+                        const modal = document.getElementById("dataset-manager-modal");
+                        if (modal) modal.classList.add("hidden");
+                    } catch (err) {
+                        alert("Error activating dataset: " + err.message);
+                    }
+                });
+            });
+
+        } catch (e) {
+            container.innerHTML = `<div style="color:var(--danger); padding:10px;">Error loading datasets: ${e.message}</div>`;
+        }
+    }
+
+    async function onDatasetChanged() {
+        // 1. Reset frontend filters and selections (Requirements 17 & 18)
+        state.selectedStore = "all";
+        state.selectedDate = null;
+        
+        if (globalStoreSelect) globalStoreSelect.value = "all";
+        if (globalDateSelect) globalDateSelect.value = "today";
+        if (globalDatePicker) {
+            globalDatePicker.value = "";
+            globalDatePicker.style.display = "none";
+        }
+        if (globalSearchInput) globalSearchInput.value = "";
+
+        const invCat = document.getElementById("inv-filter-category");
+        if (invCat) invCat.value = "all";
+        const invStat = document.getElementById("inv-filter-status");
+        if (invStat) invStat.value = "all";
+
+        const reorderPriority = document.getElementById("reorder-filter-priority");
+        if (reorderPriority) reorderPriority.value = "all";
+        const reorderCat = document.getElementById("reorder-filter-category");
+        if (reorderCat) reorderCat.value = "all";
+
+        // Reset Copilot chat messages to fresh welcome state
+        const chatContainer = document.getElementById("chat-messages-container");
+        if (chatContainer) {
+            const welcomeCard = document.getElementById("copilot-welcome-card");
+            if (welcomeCard) {
+                chatContainer.innerHTML = "";
+                chatContainer.appendChild(welcomeCard);
+            }
+        }
+
+        // 2. Refresh active dataset header pill
+        await loadActiveDatasetHeader();
+
+        // 3. Reload stores list
+        await loadStores();
+
+        // 4. Reload all views
+        await loadAllViews();
+    }
+
+    async function loadDataManagementView() {
+        try {
+            const [resActive, resList] = await Promise.all([
+                fetch("/api/datasets/active"),
+                fetch("/api/datasets")
+            ]);
+
+            if (resActive.ok) {
+                const active = await resActive.json();
+                const dmName = document.getElementById("dm-active-name");
+                const dmBadge = document.getElementById("dm-active-badge");
+                const dmProds = document.getElementById("dm-stat-products");
+                const dmStores = document.getElementById("dm-stat-stores");
+                const dmSales = document.getElementById("dm-stat-sales");
+                const dmInv = document.getElementById("dm-stat-inventory");
+                const dmDates = document.getElementById("dm-stat-dates");
+
+                if (!active.dataset_id || active.status === "NO_DATA") {
+                    if (dmName) dmName.textContent = "No Dataset Active";
+                    if (dmBadge) {
+                        dmBadge.textContent = "NOT CONNECTED";
+                        dmBadge.className = "badge badge-warning";
+                    }
+                    if (dmProds) dmProds.textContent = "0 SKUs";
+                    if (dmStores) dmStores.textContent = "0 Stores";
+                    if (dmSales) dmSales.textContent = "0 Sales Records";
+                    if (dmInv) dmInv.textContent = "0 Inventory Records";
+                    if (dmDates) dmDates.textContent = "Upload your retail data to get started";
+                } else {
+                    if (dmName) dmName.textContent = active.dataset_name || "Active Dataset";
+                    if (dmBadge) {
+                        dmBadge.textContent = active.is_demo ? "DEMO DATASET" : "CUSTOM ACTIVE";
+                        dmBadge.className = active.is_demo ? "badge badge-secondary" : "badge badge-success";
+                    }
+                    if (dmProds) dmProds.textContent = `${active.product_count} SKUs`;
+                    if (dmStores) dmStores.textContent = `${active.store_count} Stores`;
+                    if (dmSales) dmSales.textContent = `${Number(active.sales_count).toLocaleString()} Sales Records`;
+                    if (dmInv) dmInv.textContent = `${Number(active.inventory_count || (active.product_count * active.store_count)).toLocaleString()} Inventory Records`;
+                    if (dmDates) dmDates.textContent = `${active.min_date} → ${active.max_date}`;
+                }
+            }
+
+            if (resList.ok) {
+                const listData = await resList.json();
+                const container = document.getElementById("dm-datasets-list");
+                const activeId = listData.active_dataset?.dataset_id;
+                const datasets = listData.datasets || [];
+
+                if (container) {
+                    if (datasets.length === 0) {
+                        container.innerHTML = `<div style="padding:10px; color:var(--text-muted); font-size:12px;">No datasets registered.</div>`;
+                    } else {
+                        container.innerHTML = datasets.map(ds => {
+                            const isActive = (ds.dataset_id === activeId && activeId !== null);
+                            const salesStr = ds.sales_count >= 1000 ? (ds.sales_count / 1000).toFixed(1) + "K" : ds.sales_count;
+                            const revStr = "₹" + Number(ds.total_revenue || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+
+                            return `
+                                <div class="dataset-card ${isActive ? 'active-card' : ''}" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                                    <div>
+                                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                                            <span style="font-size:13px; font-weight:700; color:var(--text-primary);">${ds.dataset_name}</span>
+                                            ${isActive ? '<span class="badge badge-success" style="font-size:9px; padding:2px 6px;">ACTIVE</span>' : (ds.is_demo ? '<span class="badge badge-secondary" style="font-size:9px; padding:2px 6px;">DEMO</span>' : '<span class="badge badge-primary" style="font-size:9px; padding:2px 6px;">CUSTOM</span>')}
+                                        </div>
+                                        <div style="font-size:11px; color:var(--text-muted); display:flex; gap:8px; flex-wrap:wrap;">
+                                            <span>🏬 ${ds.store_count} Stores</span>
+                                            <span>📦 ${ds.product_count} SKUs</span>
+                                            <span>💳 ${salesStr} Sales</span>
+                                            <span>💰 ${revStr}</span>
+                                            <span>📅 ${ds.min_date} → ${ds.max_date}</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        ${isActive ? `
+                                            <button class="btn-secondary" disabled style="opacity:0.6; cursor:default; font-size:11px; padding:4px 10px;">
+                                                ✓ Active
+                                            </button>
+                                        ` : `
+                                            <button class="btn-primary btn-dm-activate" data-id="${ds.dataset_id}" style="font-size:11px; padding:4px 10px;">
+                                                ${ds.is_demo ? 'Use Demo Dataset' : 'Activate'}
+                                            </button>
+                                        `}
+                                    </div>
+                                </div>
+                            `;
+                        }).join("");
+
+                        container.querySelectorAll(".btn-dm-activate").forEach(btn => {
+                            btn.addEventListener("click", async () => {
+                                const dsId = btn.getAttribute("data-id");
+                                btn.disabled = true;
+                                btn.textContent = "Activating...";
+                                try {
+                                    const res = await fetch("/api/datasets/activate", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ dataset_id: dsId })
+                                    });
+                                    if (!res.ok) throw new Error("Failed to activate dataset");
+                                    await onDatasetChanged();
+                                } catch (err) {
+                                    alert("Error activating dataset: " + err.message);
+                                }
+                            });
+                        });
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Error loading data management view:", e);
+        }
+    }
+
+    function setupDataManagementPage() {
+        const resetBtn = document.getElementById("dm-btn-reset-demo");
+        const clearBtn = document.getElementById("dm-btn-clear-dataset");
+        const refreshBtn = document.getElementById("dm-btn-refresh-list");
+        const modeRadios = document.querySelectorAll("input[name='dm-upload-mode']");
+        const singleZone = document.getElementById("dm-single-zone");
+        const multiZone = document.getElementById("dm-multi-zone");
+        const singleInput = document.getElementById("dm-single-file-input");
+        const singleFileName = document.getElementById("dm-single-file-name");
+        const nameInput = document.getElementById("dm-input-name");
+        const validateBtn = document.getElementById("dm-btn-validate");
+        const uploadForm = document.getElementById("dm-upload-form");
+        const validationBox = document.getElementById("dm-validation-box");
+        const errorAlert = document.getElementById("dm-error-alert");
+        const progressBox = document.getElementById("dm-progress-box");
+        const progressFill = document.getElementById("dm-progress-fill");
+        const progressText = document.getElementById("dm-progress-text");
+
+        // Reset Demo (Explicitly activate demo dataset)
+        if (resetBtn) {
+            resetBtn.addEventListener("click", async () => {
+                try {
+                    const res = await fetch("/api/datasets/reset", { method: "POST" });
+                    if (!res.ok) throw new Error("Failed to reset dataset");
+                    await onDatasetChanged();
+                } catch (e) {
+                    alert("Reset failed: " + e.message);
+                }
+            });
+        }
+
+        // Clear Active Dataset (Reset to NO_DATA)
+        if (clearBtn) {
+            clearBtn.addEventListener("click", async () => {
+                try {
+                    const res = await fetch("/api/datasets/clear", { method: "POST" });
+                    if (!res.ok) throw new Error("Failed to clear active dataset");
+                    await onDatasetChanged();
+                } catch (e) {
+                    alert("Clear failed: " + e.message);
+                }
+            });
+        }
+
+        // Refresh List
+        if (refreshBtn) {
+            refreshBtn.addEventListener("click", () => loadDataManagementView());
+        }
+
+        // Toggle Upload Mode
+        modeRadios.forEach(radio => {
+            radio.addEventListener("change", (e) => {
+                if (e.target.value === "single") {
+                    if (singleZone) singleZone.classList.remove("hidden");
+                    if (multiZone) multiZone.classList.add("hidden");
+                } else {
+                    if (singleZone) singleZone.classList.add("hidden");
+                    if (multiZone) multiZone.classList.remove("hidden");
+                }
+            });
+        });
+
+        // Single File Input change
+        if (singleInput) {
+            singleInput.addEventListener("change", () => {
+                if (singleInput.files && singleInput.files[0]) {
+                    const f = singleInput.files[0];
+                    if (singleFileName) singleFileName.textContent = `Selected: ${f.name} (${(f.size / 1024).toFixed(1)} KB)`;
+                    if (nameInput && !nameInput.value.trim()) {
+                        nameInput.value = f.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+                    }
+                }
+            });
+        }
+
+        // Drag & drop on single zone
+        if (singleZone) {
+            ["dragenter", "dragover"].forEach(evt => {
+                singleZone.addEventListener(evt, (e) => {
+                    e.preventDefault();
+                    singleZone.classList.add("dragover");
+                });
+            });
+            ["dragleave", "drop"].forEach(evt => {
+                singleZone.addEventListener(evt, (e) => {
+                    e.preventDefault();
+                    singleZone.classList.remove("dragover");
+                });
+            });
+            singleZone.addEventListener("drop", (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files && files.length > 0) {
+                    singleInput.files = files;
+                    const f = files[0];
+                    if (singleFileName) singleFileName.textContent = `Selected: ${f.name} (${(f.size / 1024).toFixed(1)} KB)`;
+                    if (nameInput && !nameInput.value.trim()) {
+                        nameInput.value = f.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+                    }
+                }
+            });
+        }
+
+        // Helper to collect form data
+        function buildUploadFormData() {
+            const mode = document.querySelector("input[name='dm-upload-mode']:checked")?.value || "single";
+            const dsName = nameInput?.value || "";
+            const formData = new FormData();
+            formData.append("dataset_name", dsName);
+
+            if (mode === "single") {
+                const f = singleInput?.files?.[0];
+                if (!f) return { error: "Please select a CSV or Excel file to upload." };
+                formData.append("file", f);
+            } else {
+                const salesF = document.getElementById("dm-multi-sales-file")?.files?.[0];
+                const invF = document.getElementById("dm-multi-inv-file")?.files?.[0];
+                const prodsF = document.getElementById("dm-multi-prods-file")?.files?.[0];
+                const storesF = document.getElementById("dm-multi-stores-file")?.files?.[0];
+
+                if (!salesF) return { error: "Sales transactions CSV is required." };
+                formData.append("sales_file", salesF);
+                if (invF) formData.append("inventory_file", invF);
+                if (prodsF) formData.append("products_file", prodsF);
+                if (storesF) formData.append("stores_file", storesF);
+            }
+            return { formData };
+        }
+
+        // Validation Handler
+        if (validateBtn) {
+            validateBtn.addEventListener("click", async () => {
+                if (errorAlert) errorAlert.classList.add("hidden");
+                const buildRes = buildUploadFormData();
+                if (buildRes.error) {
+                    if (errorAlert) {
+                        errorAlert.textContent = buildRes.error;
+                        errorAlert.classList.remove("hidden");
+                    }
+                    return;
+                }
+
+                validateBtn.disabled = true;
+                validateBtn.textContent = "Profiling...";
+
+                try {
+                    const res = await fetch("/api/datasets/validate", {
+                        method: "POST",
+                        body: buildRes.formData
+                    });
+                    const val = await res.json();
+                    validateBtn.disabled = false;
+                    validateBtn.textContent = "🔍 Profile & Validate";
+
+                    if (validationBox) {
+                        validationBox.classList.remove("hidden");
+                        const valIcon = document.getElementById("dm-val-icon");
+                        const valTitle = document.getElementById("dm-val-title");
+                        const valBadge = document.getElementById("dm-val-badge");
+                        const valCounts = document.getElementById("dm-val-counts");
+                        const valMappings = document.getElementById("dm-val-mappings");
+                        const valWarnings = document.getElementById("dm-val-warnings");
+
+                        if (val.is_valid) {
+                            if (valIcon) valIcon.textContent = "✓";
+                            if (valTitle) valTitle.textContent = "Dataset Validation Profile (Passed)";
+                            if (valBadge) {
+                                valBadge.textContent = "READY FOR ACTIVATION";
+                                valBadge.className = "badge badge-success";
+                            }
+                        } else {
+                            if (valIcon) valIcon.textContent = "⚠️";
+                            if (valTitle) valTitle.textContent = "Dataset Validation Issues";
+                            if (valBadge) {
+                                valBadge.textContent = "ERRORS FOUND";
+                                valBadge.className = "badge badge-critical";
+                            }
+                        }
+
+                        if (valCounts && val.summary) {
+                            valCounts.innerHTML = `
+                                <div class="val-count-item"><span class="vc-label">SALES</span><span class="vc-val">${val.summary.sales_count?.toLocaleString() || 0}</span></div>
+                                <div class="val-count-item"><span class="vc-label">PRODUCTS</span><span class="vc-val">${val.summary.products_count?.toLocaleString() || 0}</span></div>
+                                <div class="val-count-item"><span class="vc-label">STORES</span><span class="vc-val">${val.summary.stores_count?.toLocaleString() || 0}</span></div>
+                                <div class="val-count-item"><span class="vc-label">INVENTORY</span><span class="vc-val">${val.summary.inventory_count?.toLocaleString() || 0}</span></div>
+                            `;
+                        }
+
+                        if (valMappings && val.column_mappings?.sales) {
+                            const sm = val.column_mappings.sales;
+                            valMappings.innerHTML = `
+                                <div style="font-weight:700; color:var(--text-secondary); margin-bottom:4px;">Detected Column Mapping:</div>
+                                <table class="mapping-table">
+                                    <thead><tr><th>Internal Field</th><th>Matched Uploaded Column</th></tr></thead>
+                                    <tbody>
+                                        ${Object.entries(sm).map(([k, v]) => `<tr><td><code>${k}</code></td><td><strong>${v}</strong></td></tr>`).join("")}
+                                    </tbody>
+                                </table>
+                            `;
+                        }
+
+                        if (valWarnings) {
+                            const notes = [...(val.errors || []), ...(val.warnings || [])];
+                            if (notes.length > 0) {
+                                valWarnings.innerHTML = `<div style="font-weight:700; margin-bottom:2px;">Notes & Warnings:</div><ul class="val-notes-list">${notes.map(w => `<li>${w}</li>`).join("")}</ul>`;
+                            } else {
+                                valWarnings.innerHTML = `<div style="color:var(--status-success); font-weight:600;">✓ All columns and constraints matched perfectly with 0 issues.</div>`;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    validateBtn.disabled = false;
+                    validateBtn.textContent = "🔍 Profile & Validate";
+                    if (errorAlert) {
+                        errorAlert.textContent = "Validation error: " + err.message;
+                        errorAlert.classList.remove("hidden");
+                    }
+                }
+            });
+        }
+
+        // Upload Form Submit & Activation
+        if (uploadForm) {
+            uploadForm.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                if (errorAlert) errorAlert.classList.add("hidden");
+                const buildRes = buildUploadFormData();
+                if (buildRes.error) {
+                    if (errorAlert) {
+                        errorAlert.textContent = buildRes.error;
+                        errorAlert.classList.remove("hidden");
+                    }
+                    return;
+                }
+
+                if (progressBox) progressBox.classList.remove("hidden");
+                const setProgress = (pct, text) => {
+                    if (progressFill) progressFill.style.width = pct + "%";
+                    if (progressText) progressText.textContent = text;
+                };
+
+                setProgress(20, "Uploading dataset files...");
+                await new Promise(r => setTimeout(r, 200));
+                setProgress(45, "Validating schema & mapping columns...");
+                await new Promise(r => setTimeout(r, 200));
+                setProgress(70, "Building isolated SQLite database...");
+                await new Promise(r => setTimeout(r, 200));
+
+                try {
+                    const res = await fetch("/api/datasets/upload", {
+                        method: "POST",
+                        body: buildRes.formData
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        throw new Error(data.detail || "Dataset upload failed");
+                    }
+
+                    setProgress(90, "Recalculating analytics across all views...");
+                    await new Promise(r => setTimeout(r, 200));
+                    setProgress(100, "Ready ✓ Dataset activated as active source of truth!");
+                    await new Promise(r => setTimeout(r, 300));
+
+                    if (progressBox) progressBox.classList.add("hidden");
+                    await onDatasetChanged();
+                    alert(`Dataset '${data.dataset?.dataset_name || "Custom Dataset"}' is now active across all dashboards, inventory metrics, and Copilot!`);
+                } catch (err) {
+                    if (progressBox) progressBox.classList.add("hidden");
+                    if (errorAlert) {
+                        errorAlert.textContent = "Upload failed: " + err.message + " (Previous active dataset remained unchanged)";
+                        errorAlert.classList.remove("hidden");
+                    }
+                }
+            });
+        }
     }
 
     // Navigation & Tab Switching
@@ -235,39 +1039,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Load Stores Dropdown Options
-    async function loadStores() {
-        try {
-            const res = await fetch("/api/stores");
-            const data = await res.json();
-            state.storesData = data;
 
-            if (globalStoreSelect) {
-                globalStoreSelect.innerHTML = '<option value="all">All Stores (5)</option>';
-                data.forEach(s => {
-                    const opt = document.createElement("option");
-                    opt.value = s.store_id;
-                    opt.textContent = `${s.store_name} (${s.location})`;
-                    globalStoreSelect.appendChild(opt);
-                });
-            }
-
-            const salesStoreSel = document.getElementById("sales-store-select");
-            if (salesStoreSel) {
-                salesStoreSel.innerHTML = '<option value="all">All Store Locations</option>';
-                data.forEach(s => {
-                    const opt = document.createElement("option");
-                    opt.value = s.store_id;
-                    opt.textContent = s.store_name;
-                    salesStoreSel.appendChild(opt);
-                });
-            }
-
-            setupStoreComparison();
-        } catch (err) {
-            console.error("Failed to load stores:", err);
-        }
-    }
 
     // Load Executive Dashboard Data
     async function loadDashboard() {
@@ -277,9 +1049,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const res = await fetch(url);
             const data = await res.json();
-            // Out-of-range date check
+            
+            // Out-of-range date check (only shown if a specific date was selected)
             let noDataBanner = document.getElementById("date-no-data-banner");
-            if (data.no_data) {
+            if (data.no_data && state.selectedDate) {
                 if (!noDataBanner) {
                     noDataBanner = document.createElement("div");
                     noDataBanner.id = "date-no-data-banner";
@@ -300,27 +1073,33 @@ document.addEventListener("DOMContentLoaded", () => {
             const overstockEl = document.getElementById("kpi-overstock-count");
             const growthEl = document.getElementById("kpi-growth-rate");
 
-            if (revEl) revEl.textContent = `₹${data.total_revenue.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
-            if (unitsEl) unitsEl.textContent = data.total_units_sold.toLocaleString();
+            if (revEl) revEl.textContent = `₹${(data.total_revenue || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+            if (unitsEl) unitsEl.textContent = (data.total_units_sold || 0).toLocaleString();
             
-            const lowStockTotal = data.critical_low_stock_count + data.warning_low_stock_count;
+            const lowStockTotal = (data.critical_low_stock_count || 0) + (data.warning_low_stock_count || 0);
             if (alertsEl) alertsEl.textContent = lowStockTotal;
-            if (overstockEl) overstockEl.textContent = data.overstock_count;
-            if (growthEl) growthEl.textContent = "+21.6%";
+            if (overstockEl) overstockEl.textContent = data.overstock_count || 0;
+            if (growthEl) {
+                if (data.sales_growth_pct !== undefined && data.sales_growth_pct !== null && data.sales_growth_pct !== 0) {
+                    const sign = data.sales_growth_pct > 0 ? "+" : "";
+                    growthEl.textContent = `${sign}${data.sales_growth_pct}%`;
+                } else {
+                    growthEl.textContent = "0%";
+                }
+            }
 
             // Render mini sparklines cleanly inside KPI cards from real database aggregations
-            if (data.sparklines) {
-                if (data.sparklines.revenue) renderMiniSparkline("sparkline-revenue", data.sparklines.revenue, "#16A34A");
-                if (data.sparklines.units) renderMiniSparkline("sparkline-units", data.sparklines.units, "#8B5CF6");
-                if (data.sparklines.lowstock) renderMiniSparkline("sparkline-lowstock", data.sparklines.lowstock, "#F59E0B");
-                if (data.sparklines.overstock) renderMiniSparkline("sparkline-overstock", data.sparklines.overstock, "#2563EB");
-                if (data.sparklines.growth) renderMiniSparkline("sparkline-growth", data.sparklines.growth, "#16A34A");
+            if (data.sparklines && data.sparklines.revenue && data.sparklines.revenue.length > 0) {
+                renderMiniSparkline("sparkline-revenue", data.sparklines.revenue, "#16A34A");
+                renderMiniSparkline("sparkline-units", data.sparklines.units, "#8B5CF6");
+                renderMiniSparkline("sparkline-lowstock", data.sparklines.lowstock, "#F59E0B");
+                renderMiniSparkline("sparkline-overstock", data.sparklines.overstock, "#2563EB");
+                renderMiniSparkline("sparkline-growth", data.sparklines.growth, "#16A34A");
             } else {
-                renderMiniSparkline("sparkline-revenue", [12000, 14500, 13200, 16800, 18500, 21000, data.total_revenue], "#16A34A");
-                renderMiniSparkline("sparkline-units", [420, 480, 450, 520, 590, 610, data.total_units_sold], "#8B5CF6");
-                renderMiniSparkline("sparkline-lowstock", [8, 12, 10, 14, 9, 11, lowStockTotal], "#F59E0B");
-                renderMiniSparkline("sparkline-overstock", [15, 18, 14, 16, 20, 19, data.overstock_count], "#2563EB");
-                renderMiniSparkline("sparkline-growth", [4, 6, 8, 7, 10, 11, 21.6], "#16A34A");
+                ["sparkline-revenue", "sparkline-units", "sparkline-lowstock", "sparkline-overstock", "sparkline-growth"].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.innerHTML = "";
+                });
             }
 
             loadNeedsAttentionItems();
@@ -369,7 +1148,12 @@ document.addEventListener("DOMContentLoaded", () => {
             const items = await res.json();
 
             if (!items || items.length === 0) {
-                container.innerHTML = '<div class="alert-subtext" style="padding:10px;">No priority actions required today. All stock levels healthy!</div>';
+                container.innerHTML = `
+                    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:30px 16px; text-align:center;">
+                        <div style="font-size:13px; font-weight:700; color:var(--text-secondary); margin-bottom:4px;">No attention items</div>
+                        <div style="font-size:11px; color:var(--text-muted); line-height:1.4;">Upload retail data to identify stock risks and sales anomalies.</div>
+                    </div>
+                `;
                 return;
             }
 
@@ -392,16 +1176,31 @@ document.addEventListener("DOMContentLoaded", () => {
         const container = document.getElementById("inventory-donut-container");
         if (!container) return;
 
-        const total = data.total_inventory_units || 120;
-        const critical = data.critical_low_stock_count || 3;
-        const warning = data.warning_low_stock_count || 8;
-        const overstock = data.overstock_count || 12;
-        const healthy = Math.max(0, total - critical - warning - overstock);
+        const total = (data.total_inventory_records !== undefined && data.total_inventory_records !== null) ? data.total_inventory_records : (data.total_skus || (data.inventoryData ? data.inventoryData.length : 0));
+        
+        if (total === 0) {
+            container.innerHTML = `
+                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; min-height:160px; color:var(--text-muted); text-align:center; padding:20px;">
+                    <div style="font-size:24px; margin-bottom:6px;">📊</div>
+                    <div style="font-size:13px; font-weight:700; color:var(--text-secondary); margin-bottom:4px;">No inventory data available</div>
+                    <div style="font-size:11px; color:var(--text-muted);">Upload inventory data to calculate stock health.</div>
+                </div>
+            `;
+            return;
+        }
 
-        const pctH = (healthy / total) * 100;
-        const pctW = (warning / total) * 100;
-        const pctC = (critical / total) * 100;
-        const pctO = (overstock / total) * 100;
+        const critical = (data.critical_low_stock_count !== undefined) ? data.critical_low_stock_count : 0;
+        const warning = (data.warning_low_stock_count !== undefined) ? data.warning_low_stock_count : 0;
+        const overstock = (data.overstock_count !== undefined) ? data.overstock_count : 0;
+        const slow = (data.slow_moving_count !== undefined) ? data.slow_moving_count : 0;
+        const noDemand = (data.no_recent_demand_count !== undefined) ? data.no_recent_demand_count : 0;
+        const otherHealthy = Math.max(0, total - critical - warning - overstock);
+
+        const safeTotal = Math.max(1, total);
+        const pctH = (otherHealthy / safeTotal) * 100;
+        const pctW = (warning / safeTotal) * 100;
+        const pctC = (critical / safeTotal) * 100;
+        const pctO = (overstock / safeTotal) * 100;
 
         const circum = 251.32;
         const strokeH = (pctH / 100) * circum;
@@ -427,14 +1226,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     </svg>
                     <div style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
                         <div style="font-size:18px; font-weight:800; color:#0F172A;">${total}</div>
-                        <div style="font-size:10px; color:#64748B; font-weight:600;">Products</div>
+                        <div style="font-size:10px; color:#64748B; font-weight:600;">Inventory Records</div>
                     </div>
                 </div>
 
                 <div style="width:100%; display:flex; flex-direction:column; gap:4px; font-size:11px;">
                     <div style="display:flex; justify-content:space-between; padding:2px 0;">
-                        <span><span style="color:#16A34A;">●</span> Healthy Stock</span>
-                        <strong>${healthy} (${Math.round(pctH)}%)</strong>
+                        <span><span style="color:#16A34A;">●</span> Healthy / Normal</span>
+                        <strong>${otherHealthy} (${Math.round(pctH)}%)</strong>
                     </div>
                     <div style="display:flex; justify-content:space-between; padding:2px 0;">
                         <span><span style="color:#D97706;">●</span> Warning (&lt;=7D)</span>
@@ -456,14 +1255,26 @@ document.addEventListener("DOMContentLoaded", () => {
     // Render Top Products Table
     function renderTopProductsTable(products) {
         const tbody = document.getElementById("top-products-tbody");
-        if (!tbody || !products) return;
+        if (!tbody) return;
+
+        if (!products || products.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" style="text-align:center; padding:30px 16px; color:var(--text-muted);">
+                        <div style="font-weight:700; color:var(--text-secondary); font-size:13px; margin-bottom:4px;">No product data available</div>
+                        <div style="font-size:11px; color:var(--text-muted);">Upload your retail dataset to see top-performing products.</div>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
 
         tbody.innerHTML = products.slice(0, 5).map((p, idx) => `
             <tr>
                 <td><strong>#${idx + 1}</strong></td>
                 <td><strong>${p.product_name}</strong></td>
                 <td class="text-right"><strong>${p.units_sold}</strong></td>
-                <td class="text-right"><strong>₹${p.revenue.toLocaleString('en-IN', {minimumFractionDigits: 2})}</strong></td>
+                <td class="text-right"><strong>₹${(p.revenue || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</strong></td>
                 <td class="text-right"><span class="badge badge-success">+18.5%</span></td>
             </tr>
         `).join("");
@@ -472,17 +1283,29 @@ document.addEventListener("DOMContentLoaded", () => {
     // Render Store Performance Table
     function renderStorePerformanceTable(stores) {
         const tbody = document.getElementById("store-performance-tbody");
-        if (!tbody || !stores) return;
+        if (!tbody) return;
+
+        if (!stores || stores.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="4" style="text-align:center; padding:30px 16px; color:var(--text-muted);">
+                        <div style="font-weight:700; color:var(--text-secondary); font-size:13px; margin-bottom:4px;">No store data available</div>
+                        <div style="font-size:11px; color:var(--text-muted);">Upload your retail dataset to compare store performance.</div>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
 
         tbody.innerHTML = stores.map(s => {
-            const rev = s.total_revenue || 42500;
-            const targetPct = Math.min(100, Math.round((rev / 50000) * 100));
+            const rev = s.total_revenue || 0;
+            const targetPct = rev > 0 ? Math.min(100, Math.round((rev / 50000) * 100)) : 0;
             return `
                 <tr>
                     <td><strong>${s.store_name}</strong></td>
                     <td class="text-right"><strong>₹${rev.toLocaleString('en-IN', {minimumFractionDigits: 2})}</strong></td>
                     <td class="text-right"><strong>${Math.round(rev / 150)}</strong></td>
-                    <td class="text-right"><span class="badge badge-success">+${targetPct}%</span></td>
+                    <td class="text-right"><span class="badge ${targetPct > 0 ? 'badge-success' : 'badge-secondary'}">+${targetPct}%</span></td>
                 </tr>
             `;
         }).join("");
@@ -554,7 +1377,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding:20px;">No matching inventory records found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding:30px;"><div style="font-weight:700; color:var(--text-secondary); font-size:13px; margin-bottom:4px;">No inventory data available.</div><div style="font-size:11px; color:var(--text-muted);">Upload your inventory and sales data to track SKU health.</div></td></tr>';
             return;
         }
 
@@ -795,7 +1618,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = await res.json();
 
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--text-muted);">No items match reorder criteria. All stock levels healthy!</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:30px 16px; color:var(--text-muted);"><div style="font-weight:700; color:var(--text-secondary); font-size:13px; margin-bottom:4px;">No reorder recommendations</div><div style="font-size:11px; color:var(--text-muted);">Upload inventory and sales data to generate replenishment recommendations.</div></td></tr>';
                 return;
             }
 
@@ -835,7 +1658,13 @@ document.addEventListener("DOMContentLoaded", () => {
             const items = await res.json();
 
             if (!items || items.length === 0) {
-                container.innerHTML = '<div style="padding:20px; color:var(--text-muted);">No critical operational decisions required.</div>';
+                container.innerHTML = `
+                    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 16px; text-align:center; background:var(--bg-subtle); border-radius:var(--radius-md); border:1px solid var(--border-color);">
+                        <div style="font-size:28px; margin-bottom:8px;">⚡</div>
+                        <div style="font-size:14px; font-weight:700; color:var(--text-primary); margin-bottom:4px;">No operational decisions available</div>
+                        <div style="font-size:12px; color:var(--text-muted);">Upload retail data to generate evidence-based recommendations.</div>
+                    </div>
+                `;
                 return;
             }
 
@@ -900,6 +1729,17 @@ document.addEventListener("DOMContentLoaded", () => {
             const res = await fetch(url);
             const data = await res.json();
 
+            if (!data || !data.comparison_table || data.comparison_table.length === 0) {
+                container.innerHTML = `
+                    <div style="grid-column: 1 / -1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 16px; text-align:center; background:var(--bg-subtle); border-radius:var(--radius-md); border:1px solid var(--border-color); width:100%;">
+                        <div style="font-size:28px; margin-bottom:8px;">🏬</div>
+                        <div style="font-size:14px; font-weight:700; color:var(--text-primary); margin-bottom:4px;">No store data available</div>
+                        <div style="font-size:12px; color:var(--text-muted);">Upload your retail dataset to compare store performance.</div>
+                    </div>
+                `;
+                return;
+            }
+
             const tableRowsHTML = data.comparison_table.map(s => `
                 <tr>
                     <td><strong>${s.store_name}</strong><br><span style="font-size:10px; color:var(--text-muted);">${s.location}</span></td>
@@ -961,7 +1801,34 @@ document.addEventListener("DOMContentLoaded", () => {
             const res = await fetch(url);
             const rep = await res.json();
 
-            const kpis = rep.kpis;
+            const kpis = rep.kpis || {};
+            const isNoData = !kpis || kpis.no_data || (kpis.total_revenue === 0 && kpis.total_units_sold === 0 && (kpis.total_inventory_records || 0) === 0);
+
+            if (isNoData) {
+                container.innerHTML = `
+                    <div style="border-bottom:2px solid var(--brand-teal); padding-bottom:12px; margin-bottom:16px;">
+                        <h2 style="font-size:20px; color:var(--text-primary);">${rep.report_title || "RetailIQ Executive Operations Report"}</h2>
+                        <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
+                            Status: <strong>No Dataset Active</strong>
+                        </div>
+                    </div>
+
+                    <div class="kpi-grid" style="margin-bottom:20px;">
+                        <div class="kpi-card"><div class="kpi-title">TOTAL REVENUE</div><div class="kpi-value">₹0.00</div></div>
+                        <div class="kpi-card"><div class="kpi-title">UNITS SOLD</div><div class="kpi-value">0</div></div>
+                        <div class="kpi-card"><div class="kpi-title">VALUATION</div><div class="kpi-value">₹0.00</div></div>
+                        <div class="kpi-card highlight-critical"><div class="kpi-title">CRITICAL SKUs</div><div class="kpi-value">0</div></div>
+                    </div>
+
+                    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 16px; text-align:center; background:var(--bg-subtle); border-radius:var(--radius-md); border:1px dashed var(--border-color);">
+                        <div style="font-size:24px; margin-bottom:8px;">📋</div>
+                        <div style="font-size:14px; font-weight:700; color:var(--text-primary); margin-bottom:4px;">Executive report will be generated after retail data is uploaded.</div>
+                        <div style="font-size:12px; color:var(--text-muted);">Upload your sales transactions and inventory datasets in Data Management to compile an executive overview.</div>
+                    </div>
+                `;
+                return;
+            }
+
             container.innerHTML = `
                 <div style="border-bottom:2px solid var(--brand-teal); padding-bottom:12px; margin-bottom:16px;">
                     <h2 style="font-size:20px; color:var(--text-primary);">${rep.report_title}</h2>
@@ -971,23 +1838,23 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
 
                 <div class="kpi-grid" style="margin-bottom:20px;">
-                    <div class="kpi-card"><div class="kpi-title">TOTAL REVENUE</div><div class="kpi-value">₹${kpis.total_revenue.toLocaleString('en-IN', {minimumFractionDigits:2})}</div></div>
-                    <div class="kpi-card"><div class="kpi-title">UNITS SOLD</div><div class="kpi-value">${kpis.total_units_sold.toLocaleString()}</div></div>
-                    <div class="kpi-card"><div class="kpi-title">VALUATION</div><div class="kpi-value">₹${kpis.total_inventory_valuation.toLocaleString('en-IN', {minimumFractionDigits:2})}</div></div>
-                    <div class="kpi-card highlight-critical"><div class="kpi-title">CRITICAL SKUs</div><div class="kpi-value">${kpis.critical_low_stock_count}</div></div>
+                    <div class="kpi-card"><div class="kpi-title">TOTAL REVENUE</div><div class="kpi-value">₹${(kpis.total_revenue || 0).toLocaleString('en-IN', {minimumFractionDigits:2})}</div></div>
+                    <div class="kpi-card"><div class="kpi-title">UNITS SOLD</div><div class="kpi-value">${(kpis.total_units_sold || 0).toLocaleString()}</div></div>
+                    <div class="kpi-card"><div class="kpi-title">VALUATION</div><div class="kpi-value">₹${(kpis.total_inventory_valuation || 0).toLocaleString('en-IN', {minimumFractionDigits:2})}</div></div>
+                    <div class="kpi-card highlight-critical"><div class="kpi-title">CRITICAL SKUs</div><div class="kpi-value">${kpis.critical_low_stock_count || 0}</div></div>
                 </div>
 
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
                     <div>
                         <h4 style="font-size:13px; font-weight:700; margin-bottom:8px;">Top Performing SKUs</h4>
                         <ul style="font-size:12px; line-height:1.6; padding-left:16px;">
-                            ${rep.top_products.map(p => `<li><strong>${p.product_name}</strong>: ₹${p.revenue.toLocaleString('en-IN')} (${p.units_sold} units)</li>`).join("")}
+                            ${(rep.top_products || []).map(p => `<li><strong>${p.product_name}</strong>: ₹${(p.revenue || 0).toLocaleString('en-IN')} (${p.units_sold} units)</li>`).join("")}
                         </ul>
                     </div>
                     <div>
                         <h4 style="font-size:13px; font-weight:700; margin-bottom:8px;">Operational Reorder Recommendations</h4>
                         <ul style="font-size:12px; line-height:1.6; padding-left:16px;">
-                            ${rep.recommended_reorders.slice(0, 4).map(r => `<li><strong>${r.product_name}</strong> (${r.store_name}): +${r.recommended_reorder} units</li>`).join("")}
+                            ${(rep.recommended_reorders || []).slice(0, 4).map(r => `<li><strong>${r.product_name}</strong> (${r.store_name}): +${r.recommended_reorder} units</li>`).join("")}
                         </ul>
                     </div>
                 </div>
@@ -1078,8 +1945,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const container = document.getElementById(containerId);
         if (!container) return;
         
-        if (!chartSpec || !chartSpec.labels || chartSpec.labels.length === 0) {
-            container.innerHTML = '<div style="color:var(--text-muted); font-size:12px; padding:30px; text-align:center;">No chart data available for this query.</div>';
+        if (!chartSpec || !chartSpec.labels || chartSpec.labels.length === 0 || (chartSpec.datasets && chartSpec.datasets.every(d => !d.data || d.data.length === 0 || d.data.every(v => v === 0)))) {
+            container.innerHTML = `
+                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; min-height:160px; color:var(--text-muted); text-align:center; padding:20px;">
+                    <div style="font-size:13px; font-weight:700; color:var(--text-secondary); margin-bottom:4px;">No sales data available</div>
+                    <div style="font-size:11px; color:var(--text-muted);">Upload a retail dataset to see revenue and sales trends.</div>
+                </div>
+            `;
             return;
         }
 

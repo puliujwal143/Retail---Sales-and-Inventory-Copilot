@@ -34,6 +34,13 @@
                     <span>Dashboard</span>
                 </button>
 
+                <div class="nav-section-label">DATA & IMPORT</div>
+                <button class="nav-item" data-tab="data-management" id="nav-data-management" style="background:rgba(8,127,128,0.08); color:var(--brand-teal); font-weight:700;">
+                    <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    <span>Data Management</span>
+                    <span class="badge badge-primary" style="margin-left:auto; font-size:9px; padding:1px 5px; font-weight:700;">UPLOAD</span>
+                </button>
+
                 <div class="nav-section-label">OPERATIONS</div>
                 <button class="nav-item" data-tab="inventory">
                     <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
@@ -67,6 +74,12 @@
                     <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
                     <span>Executive Reports</span>
                 </button>
+
+                <div class="nav-section-label">DATA & WORKSPACE</div>
+                <button class="nav-item" id="nav-btn-dataset-manager" type="button">
+                    <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    <span>Active Datasets</span>
+                </button>
             </nav>
 
             <div class="sidebar-footer">
@@ -99,10 +112,27 @@
                     <input type="text" id="global-search-input" placeholder="Search products, categories, stores..." class="form-input search-input">
                 </div>
                 <div class="header-right">
+                    <!-- Active Dataset Status Pill (Compact Single Line) -->
+                    <button id="header-dataset-pill" class="active-dataset-pill" type="button" title="Click to open Data Management & Switcher">
+                        <span class="dataset-pill-dot green-pulse"></span>
+                        <span class="dataset-pill-text">
+                            <strong id="pill-dataset-name">No Dataset Active</strong>
+                            <span class="pill-divider">•</span>
+                            <span id="pill-dataset-stats" style="color:var(--text-muted);">Not Connected</span>
+                        </span>
+                        <span class="dataset-pill-badge" id="pill-dataset-badge" style="background:#FEE2E2; color:#991B1B;">NO DATA</span>
+                    </button>
+
+                    <!-- Upload Data CTA -->
+                    <button id="header-btn-upload-data" class="btn-primary quick-jump" data-tab="data-management" type="button">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        <span>Upload Data</span>
+                    </button>
+
                     <!-- Date Snapshot Selector -->
                     <div class="date-snapshot-wrapper">
                         <span style="font-size:11px; font-weight:700; color:var(--text-muted); margin-right:4px;">📅 Date Snapshot:</span>
-                        <select id="global-date-select" class="form-select" style="padding-right:24px;">
+                        <select id="global-date-select" class="form-select">
                             <option value="today">Today (Latest)</option>
                             <option value="yesterday">Yesterday</option>
                             <option value="7d">Last 7 Days</option>
@@ -115,13 +145,15 @@
                             <option value="3650d">Last 10 Years</option>
                             <option value="custom">Custom Date...</option>
                         </select>
-                        <input type="date" id="global-date-picker" class="form-input" style="width:145px; min-width:145px; display:none; padding:4px 8px; font-size:12px;">
+                        <input type="date" id="global-date-picker" class="form-input" style="width:130px; display:none; padding:2px 6px; font-size:11px;">
                     </div>
+
                     <div class="store-selector-wrapper">
                         <select id="global-store-select" class="form-select">
-                            <option value="all">All Stores (5)</option>
+                            <option value="all">All Stores</option>
                         </select>
                     </div>
+
                     <div class="user-profile-badge">
                         <div class="avatar-circle">SM</div>
                         <span class="user-name">Store Manager</span>
@@ -141,7 +173,10 @@
                             <p>Here's what's happening across your retail operation today.</p>
                         </div>
                     </div>
-                    <div class="hero-right">
+                    <div class="hero-right" style="display:flex; align-items:center; gap:12px;">
+                        <button class="btn-primary quick-jump" data-tab="data-management" style="display:flex; align-items:center; gap:6px; height:34px; padding:0 14px; font-size:12px; font-weight:700; white-space:nowrap;">
+                            <span>⬆ Upload Custom Retail Data</span>
+                        </button>
                         <div class="quote-card">
                             <span class="quote-mark">“</span> Data turns everyday decisions into extraordinary results. — RetailIQ
                         </div>
@@ -159,8 +194,8 @@
                         </div>
                         <div class="kpi-body">
                             <div class="kpi-left">
-                                <div class="kpi-value" id="kpi-revenue">₹418,800</div>
-                                <div class="kpi-trend trend-positive">↑ 12.4% <span class="trend-sub">vs previous period</span></div>
+                                <div class="kpi-value" id="kpi-revenue">₹0.00</div>
+                                <div class="kpi-trend trend-positive" id="kpi-rev-trend"><span class="trend-sub">0% vs previous</span></div>
                             </div>
                             <div class="kpi-sparkline" id="sparkline-revenue"></div>
                         </div>
@@ -175,8 +210,8 @@
                         </div>
                         <div class="kpi-body">
                             <div class="kpi-left">
-                                <div class="kpi-value" id="kpi-units">12,430</div>
-                                <div class="kpi-trend trend-positive">↑ 8.2% <span class="trend-sub">vs previous period</span></div>
+                                <div class="kpi-value" id="kpi-units">0</div>
+                                <div class="kpi-trend trend-positive" id="kpi-units-trend"><span class="trend-sub">0% vs previous</span></div>
                             </div>
                             <div class="kpi-sparkline" id="sparkline-units"></div>
                         </div>
@@ -191,8 +226,8 @@
                         </div>
                         <div class="kpi-body">
                             <div class="kpi-left">
-                                <div class="kpi-value" id="kpi-alerts-count">18</div>
-                                <div class="kpi-trend trend-negative">↑ 28% <span class="trend-sub">need attention</span></div>
+                                <div class="kpi-value" id="kpi-alerts-count">0</div>
+                                <div class="kpi-trend trend-negative" id="kpi-alerts-trend"><span class="trend-sub">need attention</span></div>
                             </div>
                             <div class="kpi-sparkline" id="sparkline-lowstock"></div>
                         </div>
@@ -207,8 +242,8 @@
                         </div>
                         <div class="kpi-body">
                             <div class="kpi-left">
-                                <div class="kpi-value" id="kpi-overstock-count">12</div>
-                                <div class="kpi-trend trend-positive">↓ 15% <span class="trend-sub">potential capital lock</span></div>
+                                <div class="kpi-value" id="kpi-overstock-count">0</div>
+                                <div class="kpi-trend trend-positive" id="kpi-overstock-trend"><span class="trend-sub">potential capital lock</span></div>
                             </div>
                             <div class="kpi-sparkline" id="sparkline-overstock"></div>
                         </div>
@@ -223,8 +258,8 @@
                         </div>
                         <div class="kpi-body">
                             <div class="kpi-left">
-                                <div class="kpi-value" id="kpi-growth-rate">+21.6%</div>
-                                <div class="kpi-trend trend-positive"><span class="trend-sub">vs last month</span></div>
+                                <div class="kpi-value" id="kpi-growth-rate">0%</div>
+                                <div class="kpi-trend trend-positive"><span class="trend-sub">vs last period</span></div>
                             </div>
                             <div class="kpi-sparkline" id="sparkline-growth"></div>
                         </div>
@@ -631,6 +666,177 @@
                     <!-- Executive Report structured BI elements rendered by app.js -->
                 </div>
             </section>
+            <!-- TAB 9: DATA MANAGEMENT WORKBENCH -->
+            <section id="tab-data-management" class="tab-view">
+                <!-- Top Header Bar -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <h2 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0;">Data Management & Retail Dataset Hub</h2>
+                            <span class="badge badge-success" style="font-size: 10px; padding: 2px 7px;">Single Source of Truth</span>
+                        </div>
+                        <p style="font-size: 12px; color: var(--text-muted); margin: 2px 0 0 0;">
+                            Upload, profile, and activate custom retail data. The active dataset immediately powers all dashboards, inventory metrics, store rankings, and Gemini Copilot reasoning.
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button id="dm-btn-clear-dataset" class="btn-secondary" style="font-size: 11px; padding: 6px 12px; font-weight: 600; color: #DC2626; border-color: #FCA5A5;">
+                            ✕ Clear Active Dataset
+                        </button>
+                        <button id="dm-btn-reset-demo" class="btn-secondary" style="font-size: 11px; padding: 6px 12px; font-weight: 600;">
+                            ↺ Use Demo Dataset
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 1. CURRENT ACTIVE DATASET (Compact Horizontal Strip) -->
+                <div class="active-dataset-banner panel" style="margin-bottom: 14px; padding: 12px 16px; background: var(--brand-teal-bg); border: 1px solid var(--brand-teal-border); border-radius: var(--radius-md);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="dataset-pill-dot green-pulse" style="width: 8px; height: 8px;"></div>
+                            <div>
+                                <div style="font-size: 9px; font-weight: 700; color: var(--brand-teal); text-transform: uppercase; letter-spacing: 0.5px;">CURRENT ACTIVE DATASET</div>
+                                <div id="dm-active-name" style="font-size: 15px; font-weight: 700; color: var(--text-primary); line-height: 1.2;">No Dataset Active</div>
+                            </div>
+                        </div>
+                        <div class="active-ds-metrics-strip" style="display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--text-secondary); flex-wrap: wrap;">
+                            <span>📦 <strong id="dm-stat-products">0 SKUs</strong></span>
+                            <span style="color:var(--border-color)">|</span>
+                            <span>🏬 <strong id="dm-stat-stores">0 Stores</strong></span>
+                            <span style="color:var(--border-color)">|</span>
+                            <span>💳 <strong id="dm-stat-sales">0 Sales Records</strong></span>
+                            <span style="color:var(--border-color)">|</span>
+                            <span>📊 <strong id="dm-stat-inventory">0 Inventory Records</strong></span>
+                            <span style="color:var(--border-color)">|</span>
+                            <span>📅 Status: <strong id="dm-stat-dates">Upload your retail data to get started</strong></span>
+                        </div>
+                        <span id="dm-active-badge" class="badge badge-warning" style="font-size: 10px; padding: 3px 8px;">NOT CONNECTED</span>
+                    </div>
+                </div>
+
+                <!-- 2. IMPORT CUSTOM RETAIL DATA (Primary Focus, Above the Fold) -->
+                <div class="panel" style="margin-bottom: 14px; padding: 16px 20px; height: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div>
+                            <h3 style="font-size: 14px; font-weight: 700; color: var(--text-primary); margin: 0;">IMPORT CUSTOM RETAIL DATA</h3>
+                            <span style="font-size: 11px; color: var(--text-muted);">Upload single CSV/Excel (.xlsx) or 4 separate CSVs with automatic intelligent column mapping</span>
+                        </div>
+                    </div>
+
+                    <form id="dm-upload-form">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px; align-items: center;">
+                            <div>
+                                <label style="font-weight: 600; font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+                                    Dataset Name (Optional)
+                                </label>
+                                <input type="text" id="dm-input-name" placeholder="e.g., My Retail Store 2026" class="form-input" style="width: 100%; height: 34px;">
+                            </div>
+                            <div>
+                                <label style="font-weight: 600; font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+                                    Upload Mode
+                                </label>
+                                <div style="display: flex; gap: 16px; align-items: center; height: 34px;">
+                                    <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
+                                        <input type="radio" name="dm-upload-mode" value="single" checked> Single File (.csv / .xlsx)
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
+                                        <input type="radio" name="dm-upload-mode" value="multi"> 4 Separate CSVs
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Single File Dropzone -->
+                        <div id="dm-single-zone" class="upload-dropzone" style="margin-bottom: 12px; padding: 18px 14px; border: 2px dashed var(--brand-teal-border); border-radius: var(--radius-md); text-align: center; background: #FAFDFD;">
+                            <div class="dropzone-icon" style="font-size: 24px; margin-bottom: 2px;">📁</div>
+                            <div class="dropzone-title" style="font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 2px;">Drag & drop your CSV or Excel (.xlsx) file here</div>
+                            <div class="dropzone-sub" style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">or click Choose File from your computer (Supports .csv, .xlsx, .xls)</div>
+                            <input type="file" id="dm-single-file-input" accept=".csv, .xlsx, .xls" style="display: none;">
+                            <button type="button" class="btn-secondary" onclick="document.getElementById('dm-single-file-input').click()" style="font-size: 12px; padding: 6px 18px; font-weight: 600;">
+                                Choose File
+                            </button>
+                            <div id="dm-single-file-name" class="file-chosen-text" style="font-size: 11px; margin-top: 6px; font-weight: 600; color: var(--brand-teal);">No file chosen</div>
+                        </div>
+
+                        <!-- Multi-File Dropzone -->
+                        <div id="dm-multi-zone" class="multi-upload-grid hidden" style="margin-bottom: 12px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+                            <div class="multi-drop-card" style="padding: 8px 10px;">
+                                <span class="file-label" style="font-size: 11px; font-weight: 600; margin-bottom: 4px;">1. Sales (Required)*</span>
+                                <input type="file" id="dm-multi-sales-file" accept=".csv" class="form-input" style="height: 30px; font-size: 11px; padding: 2px 4px;">
+                            </div>
+                            <div class="multi-drop-card" style="padding: 8px 10px;">
+                                <span class="file-label" style="font-size: 11px; font-weight: 600; margin-bottom: 4px;">2. Inventory (Optional)</span>
+                                <input type="file" id="dm-multi-inv-file" accept=".csv" class="form-input" style="height: 30px; font-size: 11px; padding: 2px 4px;">
+                            </div>
+                            <div class="multi-drop-card" style="padding: 8px 10px;">
+                                <span class="file-label" style="font-size: 11px; font-weight: 600; margin-bottom: 4px;">3. Products (Optional)</span>
+                                <input type="file" id="dm-multi-prods-file" accept=".csv" class="form-input" style="height: 30px; font-size: 11px; padding: 2px 4px;">
+                            </div>
+                            <div class="multi-drop-card" style="padding: 8px 10px;">
+                                <span class="file-label" style="font-size: 11px; font-weight: 600; margin-bottom: 4px;">4. Stores (Optional)</span>
+                                <input type="file" id="dm-multi-stores-file" accept=".csv" class="form-input" style="height: 30px; font-size: 11px; padding: 2px 4px;">
+                            </div>
+                        </div>
+
+                        <!-- Validation Profiling Result Card (Appears after validation) -->
+                        <div id="dm-validation-box" class="validation-summary-card hidden" style="margin-bottom: 12px; padding: 12px 14px; border-radius: var(--radius-md); border: 1px solid var(--border-color); background: var(--bg-subtle);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span id="dm-val-icon" style="font-size: 15px;">✓</span>
+                                    <h4 id="dm-val-title" style="margin: 0; font-size: 13px; font-weight: 700; color: var(--text-primary);">Dataset Validation Profile</h4>
+                                </div>
+                                <span id="dm-val-badge" class="badge badge-success" style="font-size: 10px; padding: 2px 6px;">READY FOR ACTIVATION</span>
+                            </div>
+
+                            <div id="dm-val-counts" class="val-counts-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px;">
+                                <!-- Populated by validation script -->
+                            </div>
+
+                            <div id="dm-val-mappings" style="margin-bottom: 8px; font-size: 11px;">
+                                <!-- Column mappings table -->
+                            </div>
+
+                            <div id="dm-val-warnings" class="val-notes-list" style="font-size: 11px; color: var(--text-muted);">
+                                <!-- Warnings and notes -->
+                            </div>
+                        </div>
+
+                        <!-- Progress Animation Box -->
+                        <div id="dm-progress-box" class="dataset-progress-box hidden" style="margin-bottom: 12px; padding: 10px 14px;">
+                            <div class="progress-bar-track" style="margin-bottom: 4px;">
+                                <div id="dm-progress-fill" class="progress-bar-fill"></div>
+                            </div>
+                            <div id="dm-progress-text" class="progress-step-text" style="font-size: 11px;">Processing dataset...</div>
+                        </div>
+
+                        <div id="dm-error-alert" class="alert-box alert-error hidden" style="margin-bottom: 12px;"></div>
+
+                        <div style="display: flex; gap: 10px; justify-content: flex-end; align-items: center;">
+                            <button type="button" id="dm-btn-validate" class="btn-secondary" style="font-size: 12px; padding: 7px 16px; font-weight: 600;">
+                                🔍 Profile & Validate
+                            </button>
+                            <button type="submit" id="dm-btn-activate" class="btn-primary" style="font-size: 12px; padding: 7px 20px; font-weight: 700;">
+                                ⚡ Import & Activate Dataset
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- 3. DATASET SWITCHER (Clean, Compact, Natural Height) -->
+                <div class="panel" style="padding: 14px 20px; height: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div>
+                            <h3 style="font-size: 13px; font-weight: 700; color: var(--text-primary); margin: 0;">DATASET SWITCHER</h3>
+                            <span style="font-size: 11px; color: var(--text-muted);">Switch between Demo and uploaded custom datasets</span>
+                        </div>
+                        <button id="dm-btn-refresh-list" class="btn-icon-subtle" title="Refresh dataset list">🔄</button>
+                    </div>
+
+                    <div id="dm-datasets-list" class="datasets-vertical-list" style="display: flex; flex-direction: column; gap: 8px; height: auto; max-height: 240px; overflow-y: auto;">
+                        <!-- Populated dynamically by app.js -->
+                    </div>
+                </div>
+            </section>
         </main>
     </div>
 
@@ -665,6 +871,123 @@
                 <div class="modal-section evidence-box">
                     <h4>Supporting Evidence & Calculations</h4>
                     <div id="modal-evidence-text" class="evidence-details"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Dataset Manager & Importer Modal -->
+    <div id="dataset-manager-modal" class="modal-overlay hidden">
+        <div class="modal-card dataset-modal-card">
+            <div class="modal-header">
+                <div>
+                    <h3 style="margin:0; font-size:18px; font-weight:700; color:var(--text-primary);">RetailIQ Dataset Manager</h3>
+                    <span class="subtitle" style="font-size:12px; color:var(--text-muted);">Switch active dataset or upload custom retail CSV / Excel files</span>
+                </div>
+                <button id="dataset-modal-close-btn" class="modal-close-icon">✕</button>
+            </div>
+            
+            <div class="dataset-modal-tabs">
+                <button class="d-tab-btn active" data-dtab="dtab-switch">📁 Switch Active Dataset</button>
+                <button class="d-tab-btn" data-dtab="dtab-upload">⬆ Upload New Dataset</button>
+            </div>
+
+            <div class="modal-body" style="padding: 20px;">
+                <!-- Tab 1: Switch Dataset -->
+                <div id="dtab-switch" class="dtab-content active">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+                        <div>
+                            <div style="font-weight:700; font-size:14px; color:var(--text-primary);">Available RetailIQ Datasets</div>
+                            <div style="font-size:12px; color:var(--text-muted);">Select a dataset to immediately switch the entire application workspace.</div>
+                        </div>
+                        <button id="btn-quick-reset-demo" class="btn-secondary" style="font-size:12px; padding:6px 12px;">
+                            ↺ Reset to Demo Dataset
+                        </button>
+                    </div>
+
+                    <div id="datasets-list-container" class="datasets-grid">
+                        <!-- Populated dynamically by app.js -->
+                    </div>
+                </div>
+
+                <!-- Tab 2: Upload Dataset -->
+                <div id="dtab-upload" class="dtab-content">
+                    <form id="dataset-upload-form">
+                        <div class="form-group" style="margin-bottom:14px;">
+                            <label style="font-weight:700; font-size:13px; color:var(--text-primary); display:block; margin-bottom:4px;">
+                                Dataset Name:
+                            </label>
+                            <input type="text" id="upload-dataset-name" placeholder="e.g., My Retail Business 2025" class="form-input" style="width:100%;">
+                        </div>
+
+                        <div class="upload-mode-toggle" style="margin-bottom:14px;">
+                            <label style="font-weight:700; font-size:13px; color:var(--text-primary); display:block; margin-bottom:6px;">Upload Format:</label>
+                            <div style="display:flex; gap:16px; flex-wrap:wrap;">
+                                <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
+                                    <input type="radio" name="upload-mode" value="single" checked> Single CSV / Excel File (.xlsx, .csv)
+                                </label>
+                                <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
+                                    <input type="radio" name="upload-mode" value="multi"> 4 Separate CSV Files (Sales, Inventory, Products, Stores)
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Single File Upload Zone -->
+                        <div id="single-upload-zone" class="upload-dropzone">
+                            <div class="dropzone-icon">📄</div>
+                            <div class="dropzone-title">Drag & drop your Retail Sales or Excel Workbook here</div>
+                            <div class="dropzone-sub">Supports .csv, .xlsx, .xls with transactions, inventory, products & stores</div>
+                            <input type="file" id="single-file-input" accept=".csv, .xlsx, .xls" style="display:none;">
+                            <button type="button" class="btn-secondary" onclick="document.getElementById('single-file-input').click()" style="margin-top:10px;">
+                                Browse File
+                            </button>
+                            <div id="single-file-chosen" class="file-chosen-text">No file chosen</div>
+                        </div>
+
+                        <!-- Multi-File Upload Zone -->
+                        <div id="multi-upload-zone" class="multi-upload-grid hidden">
+                            <div class="multi-drop-card">
+                                <span class="file-label">1. Sales Transactions (Required)*</span>
+                                <input type="file" id="multi-sales-file" accept=".csv" class="form-input">
+                            </div>
+                            <div class="multi-drop-card">
+                                <span class="file-label">2. Inventory Levels (Optional)</span>
+                                <input type="file" id="multi-inv-file" accept=".csv" class="form-input">
+                            </div>
+                            <div class="multi-drop-card">
+                                <span class="file-label">3. Products Catalog (Optional)</span>
+                                <input type="file" id="multi-prods-file" accept=".csv" class="form-input">
+                            </div>
+                            <div class="multi-drop-card">
+                                <span class="file-label">4. Store Locations (Optional)</span>
+                                <input type="file" id="multi-stores-file" accept=".csv" class="form-input">
+                            </div>
+                        </div>
+
+                        <div class="dataset-helper-box">
+                            <div style="font-weight:700; font-size:12px; margin-bottom:4px; color:var(--text-primary);">💡 Automatic Normalization & Smart Synthesis:</div>
+                            <div style="font-size:11px; color:var(--text-muted); line-height:1.4;">
+                                • Flexible column headers accepted (e.g. <code>Date</code>, <code>Store</code>, <code>SKU/Product</code>, <code>Quantity</code>, <code>Revenue/Price</code>, <code>Stock</code>).<br>
+                                • If Inventory or Store tables are omitted, RetailIQ automatically derives stores, catalogs, and inventory movements from sales transactions!
+                            </div>
+                        </div>
+
+                        <!-- Loading Progress Card (Requirement 35) -->
+                        <div id="dataset-upload-progress" class="dataset-progress-box hidden">
+                            <div class="progress-bar-track">
+                                <div id="upload-progress-fill" class="progress-bar-fill"></div>
+                            </div>
+                            <div id="upload-step-text" class="progress-step-text">Importing dataset...</div>
+                        </div>
+
+                        <div id="upload-error-alert" class="alert-box alert-error hidden" style="margin-top:12px;"></div>
+
+                        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
+                            <button type="button" id="btn-cancel-upload" class="btn-secondary">Cancel</button>
+                            <button type="submit" id="btn-submit-upload" class="btn-primary">
+                                ⚡ Load into RetailIQ & Activate
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>

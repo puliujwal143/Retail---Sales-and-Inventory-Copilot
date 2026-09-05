@@ -6,18 +6,30 @@ from typing import Optional
 DB_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "retail.sqlite")
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 
+from src.dataset_manager import ActiveDatasetManager
+
 def get_connection():
-    """Returns a connection to the SQLite database."""
-    conn = sqlite3.connect(DB_FILE)
+    """Returns a connection to the active SQLite database."""
+    db_path = ActiveDatasetManager.get_active_db_path()
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db(force: bool = False):
     """
-    Initializes SQLite tables from CSV files if not initialized or forced.
-    Zero external server dependency. Works immediately.
+    Initializes demo SQLite tables from CSV files into datasets/demo.sqlite if not initialized or forced.
+    Ensures empty.sqlite exists with schema.
+    Does NOT automatically activate the demo dataset.
     """
-    conn = get_connection()
+    datasets_dir = os.path.join(DATA_DIR, "datasets")
+    os.makedirs(datasets_dir, exist_ok=True)
+    demo_db_path = os.path.join(datasets_dir, "demo.sqlite")
+    
+    # Ensure empty DB template is available
+    ActiveDatasetManager.get_instance()._ensure_empty_db()
+
+    conn = sqlite3.connect(demo_db_path)
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
     # Check if tables exist
@@ -26,9 +38,10 @@ def init_db(force: bool = False):
 
     if table_exists and not force:
         conn.close()
+        ActiveDatasetManager.register_demo_dataset(demo_db_path)
         return
 
-    print("Initializing SQLite database from CSV data...")
+    print("Initializing demo SQLite database from CSV data...")
 
     stores_csv = os.path.join(DATA_DIR, "stores.csv")
     products_csv = os.path.join(DATA_DIR, "products.csv")
@@ -66,7 +79,8 @@ def init_db(force: bool = False):
 
     conn.commit()
     conn.close()
-    print("SQLite database initialized successfully with historical inventory movements.")
+    ActiveDatasetManager.register_demo_dataset(demo_db_path)
+    print("Demo SQLite database initialized successfully.")
 
 def query_df(sql: str, params: tuple = ()) -> pd.DataFrame:
     """Executes SQL query and returns result as a pandas DataFrame."""

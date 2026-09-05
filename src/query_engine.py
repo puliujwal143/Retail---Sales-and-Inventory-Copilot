@@ -8,19 +8,36 @@ from src.response_engine import format_copilot_payload
 
 def get_database_bounds() -> Tuple[str, str, int]:
     """Returns MIN(date), MAX(date), and total records count in sales table."""
-    row = query_one("SELECT MIN(sales_date) as min_date, MAX(sales_date) as max_date, COUNT(*) as cnt FROM sales")
+    row = query_one("SELECT MIN(date) as min_date, MAX(date) as max_date, COUNT(*) as cnt FROM sales")
     if row and row["min_date"]:
-        return row["min_date"], row["max_date"], row["cnt"]
-    return "2016-01-01", "2026-09-03", 114515
+        return str(row["min_date"]), str(row["max_date"]), int(row["cnt"])
+    return "2016-01-01", "2026-09-03", 0
 
 def process_query_intent(user_query: str, store_id: Optional[str] = "all", target_date: Optional[str] = None) -> Dict[str, Any]:
     """
     Universal Copilot Engine Entry Point:
-    1. Builds structured QuerySpecification (Intent, Entities, Date Range, Store, Product, Category, Limit).
-    2. Executes deterministic SQLite calculations via analytics_engine.
-    3. Formats evidence, chart specs, and data scope via response_engine.
-    4. Emits detailed QUERY DEBUG trace log.
+    1. Checks if active dataset is present. If None, returns grounded NO_DATA response.
+    2. Builds structured QuerySpecification (Intent, Entities, Date Range, Store, Product, Category, Limit).
+    3. Executes deterministic SQLite calculations via analytics_engine.
+    4. Formats evidence, chart specs, and data scope via response_engine.
+    5. Emits detailed QUERY DEBUG trace log.
     """
+    from src.dataset_manager import ActiveDatasetManager
+    if ActiveDatasetManager.get_active_dataset_id() is None:
+        return {
+            "intent": "NO_DATA",
+            "grounding_state": "NO_DATA",
+            "answer": "I don't have an active retail dataset yet. Please upload your sales, inventory, product, and store data in Data Management so I can analyze it.",
+            "data_scope": "No Dataset Active (0 stores, 0 SKUs, 0 sales records)",
+            "key_metrics": [],
+            "recommendations": ["Go to Data Management to upload your retail data or load the demo dataset."],
+            "evidence": [],
+            "assumptions": ["System is in empty state awaiting user dataset upload."],
+            "data_sufficiency": "insufficient",
+            "chart": None,
+            "confidence": 1.0
+        }
+
     # 1. Build Query Specification via Query Planner
     spec = build_query_spec(user_query, override_store=store_id, override_date=target_date)
 
@@ -30,32 +47,41 @@ def process_query_intent(user_query: str, store_id: Optional[str] = "all", targe
     # 3. Format Payload via Response Engine
     payload = format_copilot_payload(spec, analytics_result)
 
-    # 4. QUERY DEBUG LOGGING (Requirement 20)
-    matched_names = [p["product_name"] for p in spec.get("matched_products", [])]
-    excluded_names = [p["product_name"] for p in spec.get("excluded_accessories", [])]
-    store_obj = spec.get("store")
-    store_str = store_obj["store_name"] if store_obj else "All Stores"
-    date_r = spec.get("date_range", {})
+    # 4. QUERY DEBUG LOGGING (Requirement 16)
+    parsed_entities = spec.get("parsed_entities", {})
+    grounding_state = spec.get("grounding_state", "DATA_FOUND")
+    unresolved = spec.get("unresolved_entities", [])
+    missing_reason = spec.get("missing_reason", "")
+    
+    raw_d = analytics_result.get("raw_data", [])
+    if isinstance(raw_d, list):
+        record_count = len(raw_d)
+    elif isinstance(raw_d, dict):
+        record_count = len(raw_d.get("sku_drivers", raw_d.get("growth_skus", [])))
+    else:
+        record_count = len(analytics_result.get("evidence", []))
 
-    raw_d = analytics_result.get("raw_data", {})
-    confirmed = raw_d.get("confirmed_facts", []) if isinstance(raw_d, dict) else []
-    observed = raw_d.get("observed_patterns", []) if isinstance(raw_d, dict) else []
-    unknowns = raw_d.get("unknowns", []) if isinstance(raw_d, dict) else []
+    metrics = analytics_result.get("metrics", [])
+    context_summary = str(analytics_result.get("context_summary", ""))
+    final_response = str(payload.get("answer", ""))
 
-    print("\n" + "="*50)
-    print("QUERY DEBUG")
-    print("="*50)
-    print(f"User: {user_query}")
-    print(f"Intent: {spec.get('intent')}")
-    print(f"Entity: {spec.get('product_family') or (matched_names[0] if matched_names else 'All Products')}")
-    print(f"Matched SKUs: {matched_names}")
-    print(f"Excluded: {excluded_names}")
-    print(f"Date: {date_r.get('start_date')} -> {date_r.get('end_date')} ({date_r.get('time_label')})")
-    print(f"Store: {store_str}")
-    print(f"Summary: {analytics_result.get('context_summary')}")
-    print(f"Confirmed Facts: {confirmed}")
-    print(f"Observed Patterns: {observed}")
-    print(f"Unavailable Evidence: {unknowns}")
-    print("="*50 + "\n")
+    try:
+        print("\n" + "="*60)
+        print("RETAILIQ AI GROUNDING PIPELINE TRACE")
+        print("="*60)
+        print(f"User Query            : {user_query}")
+        print(f"-> Parsed Entities    : {parsed_entities}")
+        print(f"-> Entity Validation  : State={grounding_state} | Unresolved={unresolved} | Reason={missing_reason}")
+        print(f"-> Filtered Records   : {record_count} record(s)")
+        print(f"-> Calculated Metrics : {metrics}")
+        try:
+            print(f"-> AI Context         : {context_summary}")
+            print(f"-> Final Response     : {final_response}")
+        except UnicodeEncodeError:
+            print(f"-> AI Context         : {context_summary.encode('ascii', 'ignore').decode('ascii')}")
+            print(f"-> Final Response     : {final_response.encode('ascii', 'ignore').decode('ascii')}")
+        print("="*60 + "\n")
+    except Exception as log_err:
+        pass
 
     return payload

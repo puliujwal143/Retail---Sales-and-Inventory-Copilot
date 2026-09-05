@@ -809,6 +809,144 @@ def run_attention_analysis(spec: Dict[str, Any], data_scope_str: str) -> Dict[st
     res["context_summary"] = res["context_summary"].replace("products at stockout risk", "operational priority items")
     return res
 
+def run_dataset_metadata_query(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
+    """
+    Directly answers dataset metadata and catalog queries deterministically (Requirement 14):
+    - Store counts & store names
+    - Product SKU counts, names, categories
+    - Sales transaction record counts & total volume/revenue
+    - Inventory records counts & total stock units
+    - Active dataset information
+    """
+    raw_q = spec.get("raw_question", "").lower()
+    
+    # Fetch active DB metadata
+    stores = query_all("SELECT store_id, store_name, location FROM stores ORDER BY store_id")
+    products = query_all("SELECT product_id, product_name, category, unit_price FROM products ORDER BY product_id")
+    
+    sales_meta = query_one("SELECT COUNT(*) as cnt, COALESCE(SUM(total_revenue), 0) as rev, COALESCE(SUM(quantity), 0) as units, MIN(date) as min_d, MAX(date) as max_d FROM sales")
+    inv_meta = query_one("SELECT COUNT(*) as cnt, COALESCE(SUM(current_stock), 0) as stock_units FROM inventory")
+    
+    store_cnt = len(stores)
+    prod_cnt = len(products)
+    sales_cnt = sales_meta["cnt"] if sales_meta else 0
+    sales_rev = round(float(sales_meta["rev"]), 2) if sales_meta else 0.0
+    sales_units = int(sales_meta["units"]) if sales_meta else 0
+    min_date = sales_meta["min_d"] if sales_meta and sales_meta["min_d"] else "2026-01-01"
+    max_date = sales_meta["max_d"] if sales_meta and sales_meta["max_d"] else "2026-01-01"
+    inv_cnt = inv_meta["cnt"] if inv_meta else 0
+    stock_units = int(inv_meta["stock_units"]) if inv_meta else 0
+
+    from src.dataset_manager import ActiveDatasetManager
+    active_ds = ActiveDatasetManager.get_active_dataset()
+    ds_name = active_ds.get("dataset_name", "Active Dataset")
+
+    # Determine specific sub-question
+    if any(k in raw_q for k in ["store", "stores", "location", "locations"]):
+        store_names_str = ", ".join([f"{s['store_name']} ({s['location']})" if s.get('location') else s['store_name'] for s in stores])
+        context_summary = f"You have {store_cnt} stores in your active dataset '{ds_name}': {store_names_str}."
+        metrics = [
+            {"label": "Total Stores", "value": f"{store_cnt} stores"},
+            {"label": "Active Dataset", "value": ds_name},
+            {"label": "Store Locations", "value": ", ".join([s['store_name'] for s in stores])}
+        ]
+        evidence = [{"store_name": s["store_name"], "store_id": s["store_id"], "location": s.get("location", "N/A"), "source": "stores catalog"} for s in stores]
+        chart_spec = {
+            "type": "bar",
+            "title": f"Active Stores ({store_cnt} Locations)",
+            "labels": [s["store_name"] for s in stores],
+            "datasets": [{"label": "Store", "data": [1] * len(stores), "color": "#087F80"}]
+        }
+    elif any(k in raw_q for k in ["product", "products", "sku", "skus", "catalog", "item", "items"]):
+        prod_names_str = ", ".join([p["product_name"] for p in products[:10]])
+        if len(products) > 10: prod_names_str += f", and {len(products)-10} more"
+        context_summary = f"You have {prod_cnt} products (SKUs) in your active dataset '{ds_name}': {prod_names_str}."
+        metrics = [
+            {"label": "Total SKUs", "value": f"{prod_cnt} products"},
+            {"label": "Active Dataset", "value": ds_name},
+            {"label": "Categories", "value": ", ".join(list(set(p['category'] for p in products)))}
+        ]
+        evidence = [{"product_name": p["product_name"], "category": p["category"], "unit_price": f"₹{p['unit_price']}", "source": "products catalog"} for p in products]
+        cat_counts = {}
+        for p in products:
+            c = p.get("category", "General")
+            cat_counts[c] = cat_counts.get(c, 0) + 1
+        chart_spec = {
+            "type": "bar",
+            "title": f"Product SKUs by Category ({prod_cnt} Total)",
+            "labels": list(cat_counts.keys()),
+            "datasets": [{"label": "SKU Count", "data": list(cat_counts.values()), "color": "#087F80"}]
+        }
+    elif any(k in raw_q for k in ["inventory", "stock"]):
+        context_summary = f"You have {inv_cnt} inventory records across {store_cnt} stores in your active dataset '{ds_name}', with a total of {stock_units:,} stock units on hand."
+        metrics = [
+            {"label": "Inventory Records", "value": f"{inv_cnt} records"},
+            {"label": "Total Stock Units", "value": f"{stock_units:,} units"},
+            {"label": "Stores Covered", "value": f"{store_cnt} stores"},
+            {"label": "SKUs Covered", "value": f"{prod_cnt} SKUs"}
+        ]
+        inv_rows = query_all("SELECT i.current_stock, p.product_name, st.store_name FROM inventory i JOIN products p ON i.product_id = p.product_id JOIN stores st ON i.store_id = st.store_id")
+        evidence = [{"product_name": r["product_name"], "store_name": r["store_name"], "current_stock": r["current_stock"], "source": "inventory ledger"} for r in inv_rows]
+        chart_spec = {
+            "type": "bar",
+            "title": f"Inventory Stock on Hand ({inv_cnt} Records)",
+            "labels": [f"{r['product_name'][:14]} ({r['store_name'][:6]})" for r in inv_rows[:10]],
+            "datasets": [{"label": "Current Stock", "data": [r["current_stock"] for r in inv_rows[:10]], "color": "#2563EB"}]
+        }
+    elif any(k in raw_q for k in ["sale", "sales", "transaction", "transactions", "record", "records"]):
+        context_summary = f"You have {sales_cnt:,} sales transaction records in your active dataset '{ds_name}', covering dates from {min_date} to {max_date} with a total revenue of ₹{sales_rev:,.2f} ({sales_units:,} units sold)."
+        metrics = [
+            {"label": "Sales Transactions", "value": f"{sales_cnt:,} records"},
+            {"label": "Total Revenue", "value": f"₹{sales_rev:,.2f}"},
+            {"label": "Units Sold", "value": f"{sales_units:,} units"},
+            {"label": "Date Bounds", "value": f"{min_date} → {max_date}"}
+        ]
+        evidence = [
+            {"label": "Sales Record Count", "value": sales_cnt, "source": "sales ledger"},
+            {"label": "Total Revenue", "value": sales_rev, "source": "sales ledger"},
+            {"label": "Total Units", "value": sales_units, "source": "sales ledger"},
+            {"label": "Date Bounds", "value": f"{min_date} to {max_date}", "source": "sales ledger"}
+        ]
+        chart_spec = None
+    else:
+        context_summary = (
+            f"Active Dataset: '{ds_name}'. "
+            f"Stores: {store_cnt} | Products: {prod_cnt} SKUs | "
+            f"Sales Records: {sales_cnt:,} (₹{sales_rev:,.2f}, {sales_units:,} units) | "
+            f"Inventory Records: {inv_cnt} ({stock_units:,} units) | "
+            f"Date Range: {min_date} → {max_date}."
+        )
+        metrics = [
+            {"label": "Dataset Name", "value": ds_name},
+            {"label": "Stores", "value": f"{store_cnt} stores"},
+            {"label": "Products", "value": f"{prod_cnt} SKUs"},
+            {"label": "Sales Records", "value": f"{sales_cnt:,} (₹{sales_rev:,.2f})"},
+            {"label": "Inventory Records", "value": f"{inv_cnt} ({stock_units:,} units)"},
+            {"label": "Date Range", "value": f"{min_date} → {max_date}"}
+        ]
+        evidence = [
+            {"dataset_name": ds_name, "stores": store_cnt, "products": prod_cnt, "sales": sales_cnt, "inventory": inv_cnt, "revenue": sales_rev, "source": "dataset metadata"}
+        ]
+        chart_spec = None
+
+    return {
+        "intent": "DATASET_METADATA",
+        "data_scope": f"Active Dataset: {ds_name} • Metadata Scope",
+        "data_sufficiency": "sufficient",
+        "context_summary": context_summary,
+        "metrics": metrics,
+        "recommendations": ["You can query sales trends, inventory health, or reorder recommendations for this dataset."],
+        "evidence": evidence,
+        "raw_data": {
+            "stores": stores,
+            "products": products,
+            "sales_count": sales_cnt,
+            "inventory_count": inv_cnt,
+            "revenue": sales_rev
+        },
+        "chart_data": chart_spec
+    }
+
 def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
     """
     Primary dispatcher: Executes SQL calculations for any QuerySpecification.
@@ -837,14 +975,15 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
         max_d = row_b["max_d"] if row_b else "2026-09-03"
         return {
             "intent": intent,
+            "grounding_state": "NO_DATA",
             "is_out_of_bounds": True,
             "min_db_date": min_d,
             "max_db_date": max_d,
             "data_scope": f"Date Scope: Out of Bounds ({start_date}) • Scope: {store_name}",
             "data_sufficiency": "insufficient",
             "context_summary": f"No sales records exist for the requested date {start_date}. Supported database range is {min_d} to {max_d}.",
-            "metrics": [{"label": "Requested Period", "value": start_date}, {"label": "Database Bounds", "value": f"{min_d} to {max_d}"}],
-            "recommendations": ["Select a date within the supported range (2016-01-01 to 2026-09-03)."],
+            "metrics": [],
+            "recommendations": ["Select a date within the supported range."],
             "evidence": [],
             "raw_data": [],
             "chart_data": None
@@ -857,7 +996,25 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
     elif cat_filter: data_scope_str += f" • Category: {cat_filter}"
     elif matched_products: data_scope_str += f" • Product: {matched_products[0]['product_name']}"
 
-    # 0. SALES IMPROVEMENT & CAUSAL ANALYSIS INTENT DISPATCHER
+    # Check explicit NO_DATA grounding state from Query Planner
+    if spec.get("grounding_state") == "NO_DATA":
+        missing_msg = spec.get("missing_reason", "Requested data was not found in the active dataset.")
+        return {
+            "intent": intent,
+            "grounding_state": "NO_DATA",
+            "data_scope": data_scope_str,
+            "data_sufficiency": "insufficient",
+            "context_summary": missing_msg,
+            "metrics": [],
+            "recommendations": spec.get("suggested_actions", ["Query an available product, store, or category in the active dataset."]),
+            "evidence": [],
+            "raw_data": [],
+            "chart_data": None
+        }
+
+    # 0. METADATA & CAUSAL ANALYSIS INTENT DISPATCHER
+    if intent == "DATASET_METADATA":
+        return run_dataset_metadata_query(spec, data_scope_str)
     if intent == "SALES_IMPROVEMENT":
         return run_sales_improvement_analysis(spec, data_scope_str)
     if intent in ["CAUSAL_ANALYSIS", "WHY_SALES_CHANGED"] or spec.get("requires_cause_analysis"):
@@ -867,7 +1024,18 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
     if (entity_type in ["PRODUCT_FAMILY", "PRODUCT"] or matched_products) and intent not in ["INVENTORY_SNAPSHOT", "ATTENTION_ITEMS", "LOW_STOCK", "OVERSTOCK", "REORDER"]:
         prod_ids = [p["product_id"] for p in matched_products]
         if not prod_ids:
-            prod_ids = ["PRD001", "PRD002"]
+            return {
+                "intent": intent,
+                "grounding_state": "NO_DATA",
+                "data_scope": data_scope_str,
+                "data_sufficiency": "insufficient",
+                "context_summary": spec.get("missing_reason", "No matching products found in the active dataset."),
+                "metrics": [],
+                "recommendations": ["Query an available product in the catalog."],
+                "evidence": [],
+                "raw_data": [],
+                "chart_data": None
+            }
 
         placeholders = ",".join(["?"] * len(prod_ids))
         where_clauses = [f"s.product_id IN ({placeholders})", "s.date BETWEEN ? AND ?"]
@@ -877,6 +1045,15 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
             params.append(store_id)
 
         where_sql = " AND ".join(where_clauses)
+
+        # Date duration check for granular chart aggregation
+        import datetime
+        try:
+            dt_s = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+            dt_e = datetime.datetime.strptime(end_date, "%Y-%m-%d")
+            duration_days = max(1, (dt_e - dt_s).days + 1)
+        except Exception:
+            duration_days = 365
 
         # SKU Breakdown Query
         sql_sku = f"""
@@ -891,16 +1068,26 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
         """
         sku_results = query_all(sql_sku, tuple(params))
 
-        # Yearly Trend Query for Chart & Evidence
-        sql_yearly = f"""
-            SELECT strftime('%Y', s.date) as year,
-                   SUM(s.total_revenue) as revenue,
-                   SUM(s.quantity) as units
-            FROM sales s
-            WHERE {where_sql}
-            GROUP BY year ORDER BY year
-        """
-        yearly_results = query_all(sql_yearly, tuple(params))
+        # Trend Query for Chart & Evidence (Daily if <=90 days, Yearly otherwise)
+        if duration_days <= 90:
+            sql_trend = f"""
+                SELECT s.date as period_key,
+                       SUM(s.total_revenue) as revenue,
+                       SUM(s.quantity) as units
+                FROM sales s
+                WHERE {where_sql}
+                GROUP BY s.date ORDER BY s.date ASC
+            """
+        else:
+            sql_trend = f"""
+                SELECT strftime('%Y', s.date) as period_key,
+                       SUM(s.total_revenue) as revenue,
+                       SUM(s.quantity) as units
+                FROM sales s
+                WHERE {where_sql}
+                GROUP BY period_key ORDER BY period_key ASC
+            """
+        trend_results = query_all(sql_trend, tuple(params))
 
         tot_rev = sum(r["total_revenue"] for r in sku_results)
         tot_units = sum(r["total_units"] for r in sku_results)
@@ -927,30 +1114,51 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
         metrics = [
             {"label": "Total Revenue", "value": f"₹{tot_rev:,.2f}"},
             {"label": "Total Units Sold", "value": f"{tot_units:,} units"},
-            {"label": "Best Performing SKU", "value": top_sku['product_name'] if top_sku else 'N/A'}
+            {"label": "Store Scope", "value": store_name},
+            {"label": "Time Period", "value": time_label}
         ]
+        if len(sku_results) > 1 and top_sku:
+            metrics.append({"label": "Best Performing SKU", "value": top_sku['product_name']})
 
         entity_title = product_family or (matched_products[0]["product_name"] if matched_products else "Products")
-        summary_text = (
-            f"Performance analysis for '{entity_title}' across {store_name} ({time_label}): "
-            f"Total Revenue: ₹{tot_rev:,.2f} across {tot_units:,} units sold. "
-            f"Top performing product within family: '{top_sku['product_name'] if top_sku else 'N/A'}' with ₹{top_sku['total_revenue']:,.2f} revenue."
-        )
+        if len(sku_results) <= 1:
+            summary_text = (
+                f"Sales performance for '{entity_title}' across {store_name} ({time_label}): "
+                f"Total Revenue: ₹{tot_rev:,.2f} across {tot_units:,} units sold."
+            )
+        else:
+            summary_text = (
+                f"Performance analysis for '{entity_title}' across {store_name} ({time_label}): "
+                f"Total Revenue: ₹{tot_rev:,.2f} across {tot_units:,} units sold. "
+                f"Top performing product within family: '{top_sku['product_name'] if top_sku else 'N/A'}' with ₹{top_sku['total_revenue']:,.2f} revenue."
+            )
 
-        labels = [r["year"] for r in yearly_results]
-        revs = [r["revenue"] for r in yearly_results]
+        labels = [r["period_key"] for r in trend_results]
+        revs = [r["revenue"] for r in trend_results]
 
-        # Multi-bar chart if comparing SKUs in family, else yearly trend
-        chart_spec = {
-            "type": "bar" if len(sku_results) > 1 and intent == "TOP_PRODUCTS" else "line",
-            "title": f"{entity_title} Revenue Trajectory ({time_label})",
-            "labels": [r["product_name"][:16] for r in sku_results] if len(sku_results) > 1 and intent == "TOP_PRODUCTS" else labels,
-            "datasets": [{
-                "label": "Revenue (₹)",
-                "data": [r["total_revenue"] for r in sku_results] if len(sku_results) > 1 and intent == "TOP_PRODUCTS" else revs,
-                "color": "#087F80"
-            }]
-        }
+        # Multi-bar chart if comparing multiple SKUs, else time trend
+        if len(sku_results) > 1 and intent == "TOP_PRODUCTS":
+            chart_spec = {
+                "type": "bar",
+                "title": f"{entity_title} Revenue by SKU ({time_label})",
+                "labels": [r["product_name"][:16] for r in sku_results],
+                "datasets": [{
+                    "label": "Revenue (₹)",
+                    "data": [r["total_revenue"] for r in sku_results],
+                    "color": "#087F80"
+                }]
+            }
+        else:
+            chart_spec = {
+                "type": "bar" if duration_days <= 14 else "line",
+                "title": f"{entity_title} Revenue Trajectory ({time_label})",
+                "labels": labels,
+                "datasets": [{
+                    "label": "Revenue (₹)",
+                    "data": revs,
+                    "color": "#087F80"
+                }]
+            }
 
         return {
             "intent": intent,
@@ -958,7 +1166,7 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
             "data_sufficiency": "sufficient",
             "context_summary": summary_text,
             "metrics": metrics,
-            "recommendations": [f"Maintain optimal stock for lead SKU '{top_sku['product_name'] if top_sku else 'N/A'}'."],
+            "recommendations": [f"Maintain optimal stock for '{entity_title}'."],
             "evidence": evidence,
             "raw_data": sku_results,
             "chart_data": chart_spec
@@ -1242,43 +1450,93 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
             }
         }
 
-    # 9. GENERAL / DEFAULT SALES TREND & SUMMARY
-    sql = """
-        SELECT strftime('%Y', date) as year,
-               SUM(total_revenue) as revenue,
-               SUM(quantity) as units
-        FROM sales
-        WHERE date BETWEEN ? AND ?
-        GROUP BY year
-        ORDER BY year
-    """
-    yearly = query_all(sql, (start_date, end_date))
-    if not yearly:
-        sql = "SELECT strftime('%Y', date) as year, SUM(total_revenue) as revenue, SUM(quantity) as units FROM sales GROUP BY year ORDER BY year"
-        yearly = query_all(sql)
+    # 9. GENERAL / DEFAULT SALES TREND & SUMMARY (Strict store & date isolation)
+    prod_ids = [p["product_id"] for p in matched_products] if matched_products else []
+    where_parts = ["s.date BETWEEN ? AND ?"]
+    params = [start_date, end_date]
+    if store_id:
+        where_parts.append("s.store_id = ?")
+        params.append(store_id)
+    if cat_filter:
+        where_parts.append("p.category = ?")
+        params.append(cat_filter)
+    if prod_ids:
+        placeholders = ",".join(["?"] * len(prod_ids))
+        where_parts.append(f"s.product_id IN ({placeholders})")
+        params.extend(prod_ids)
 
-    labels = [r["year"] for r in yearly]
-    revs = [r["revenue"] for r in yearly]
+    where_sql = "WHERE " + " AND ".join(where_parts)
+
+    # Calculate date duration in days
+    import datetime
+    dt_s = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+    dt_e = datetime.datetime.strptime(end_date, "%Y-%m-%d")
+    duration_days = max(1, (dt_e - dt_s).days + 1)
+
+    if duration_days <= 90:
+        # Group by day
+        sql = f"""
+            SELECT s.date as period_key,
+                   COALESCE(SUM(s.total_revenue), 0) as revenue,
+                   COALESCE(SUM(s.quantity), 0) as units
+            FROM sales s
+            JOIN products p ON s.product_id = p.product_id
+            {where_sql}
+            GROUP BY s.date
+            ORDER BY s.date ASC
+        """
+    else:
+        # Group by year
+        sql = f"""
+            SELECT strftime('%Y', s.date) as period_key,
+                   COALESCE(SUM(s.total_revenue), 0) as revenue,
+                   COALESCE(SUM(s.quantity), 0) as units
+            FROM sales s
+            JOIN products p ON s.product_id = p.product_id
+            {where_sql}
+            GROUP BY period_key
+            ORDER BY period_key ASC
+        """
+
+    period_rows = query_all(sql, tuple(params))
+    
+    labels = [r["period_key"] for r in period_rows]
+    revs = [r["revenue"] for r in period_rows]
     tot_rev = sum(revs)
-    tot_units = sum(r["units"] for r in yearly)
+    tot_units = sum(r["units"] for r in period_rows)
 
-    evidence = [{"year": r["year"], "revenue": r["revenue"], "units_sold": r["units"], "source": "sales ledger"} for r in yearly]
+    evidence = [{"date": r["period_key"], "store_name": store_name, "revenue": r["revenue"], "units_sold": r["units"], "source": "sales ledger"} for r in period_rows]
+
+    target_entity_name = product_family or (matched_products[0]["product_name"] if matched_products else (cat_filter if cat_filter else ""))
+    if target_entity_name:
+        if duration_days == 1:
+            summary_text = f"Sales summary for '{target_entity_name}' ({time_label}) across {store_name}: Total Revenue: ₹{tot_rev:,.2f} ({tot_units:,} units sold across {len(period_rows)} transaction days)."
+        else:
+            summary_text = f"Sales summary for '{target_entity_name}' ({time_label}) across {store_name}: Total Revenue: ₹{tot_rev:,.2f} ({tot_units:,} units sold across {duration_days} days)."
+    else:
+        if duration_days == 1:
+            summary_text = f"Sales summary for {time_label} across {store_name}: Total Revenue: ₹{tot_rev:,.2f} ({tot_units:,} units sold across {len(period_rows)} transaction days)."
+        else:
+            summary_text = f"Sales summary for {time_label} across {store_name}: Total Revenue: ₹{tot_rev:,.2f} ({tot_units:,} units sold across {duration_days} days)."
+
+    metrics = [
+        {"label": "Total Revenue", "value": f"₹{tot_rev:,.2f}"},
+        {"label": "Units Sold", "value": f"{tot_units:,} units"},
+        {"label": "Store Scope", "value": store_name},
+        {"label": "Time Period", "value": time_label}
+    ]
 
     return {
         "intent": intent,
         "data_scope": data_scope_str,
         "data_sufficiency": "sufficient",
-        "context_summary": f"Historical sales summary for {time_label} across {store_name}. Total Revenue: ₹{tot_rev:,.2f} ({tot_units:,} units sold).",
-        "metrics": [
-            {"label": "Total Revenue", "value": f"₹{tot_rev:,.2f}"},
-            {"label": "Units Sold", "value": f"{tot_units:,} units"},
-            {"label": "Time Period", "value": time_label}
-        ],
+        "context_summary": summary_text,
+        "metrics": metrics,
         "recommendations": ["Explore specific store or product breakdowns for deeper operational insights."],
         "evidence": evidence,
-        "raw_data": yearly,
+        "raw_data": period_rows,
         "chart_data": {
-            "type": "line",
+            "type": "bar" if duration_days <= 14 else "line",
             "title": f"Revenue Trend ({time_label})",
             "labels": labels,
             "datasets": [{"label": "Revenue (₹)", "data": revs, "color": "#087F80"}]

@@ -14,28 +14,54 @@ SLOW_MOVING_MIN_STOCK = 20         # Minimum stock to qualify as Slow Moving
 
 def get_recent_demand_period(target_date: str = None) -> Tuple[str, str, int]:
     """
-    Returns (recent_start_date, recent_end_date, INVENTORY_DEMAND_WINDOW_DAYS).
-    Uses the latest available sale_date in the database as the end date.
+    Returns (recent_start_date, recent_end_date, window_days).
+    Dynamically computes available historical days in active dataset:
+    - If active dataset has >= 90 days: uses trailing 90 days.
+    - If active dataset has < 90 days (e.g. 45 days, 10 days, 5 days): uses all available days.
+    - Resolves "today" / "latest" / None to the MAX date in the active dataset.
+    Never fabricates missing days.
     """
-    if target_date:
-        end_date_str = target_date
+    bounds = query_one("SELECT MIN(date) as min_d, MAX(date) as max_d FROM sales")
+    min_date_str = str(bounds["min_d"]) if bounds and bounds.get("min_d") else "2026-01-01"
+    max_date_str = str(bounds["max_d"]) if bounds and bounds.get("max_d") else "2026-01-01"
+
+    if not target_date or target_date in ["today", "latest", "None", "null"]:
+        end_date_str = max_date_str
     else:
-        res = query_one("SELECT MAX(date) as max_d FROM sales")
-        end_date_str = res["max_d"] if res and res.get("max_d") else "2026-09-03"
+        end_date_str = target_date
+        if end_date_str > max_date_str:
+            end_date_str = max_date_str
+        if end_date_str < min_date_str:
+            end_date_str = min_date_str
 
     dt_end = pd.to_datetime(end_date_str)
-    dt_start = dt_end - pd.Timedelta(days=INVENTORY_DEMAND_WINDOW_DAYS - 1)
+    dt_min = pd.to_datetime(min_date_str)
+    
+    total_available_days = max(1, (dt_end - dt_min).days + 1)
+    window_days = min(INVENTORY_DEMAND_WINDOW_DAYS, total_available_days)
+
+    dt_start = dt_end - pd.Timedelta(days=window_days - 1)
     start_date_str = dt_start.strftime("%Y-%m-%d")
-    return start_date_str, end_date_str, INVENTORY_DEMAND_WINDOW_DAYS
+    return start_date_str, end_date_str, window_days
+
+from src.dataset_manager import ActiveDatasetManager
 
 def get_inventory_status_df(store_id: str = None, category: str = None, target_date: str = None) -> pd.DataFrame:
     """
     Computes deterministic inventory status metrics across stores and products.
-    Uses the centralized 90-day recent demand window for daily sales & coverage.
+    Uses the centralized demand window for daily sales & coverage.
     """
+    if ActiveDatasetManager.get_active_dataset_id() is None:
+        return pd.DataFrame()
+
     start_date_str, end_date_str, window_days = get_recent_demand_period(target_date)
 
-    if target_date:
+    # If target_date is not provided, or matches/exceeds the max dataset date, use current_stock directly
+    bounds = query_one("SELECT MAX(date) as max_d FROM sales")
+    max_dataset_date = str(bounds["max_d"]) if bounds and bounds.get("max_d") else "2026-01-01"
+    is_historical_snapshot = bool(target_date and target_date < max_dataset_date)
+
+    if is_historical_snapshot:
         query = """
         WITH date_stock AS (
             SELECT store_id, product_id, COALESCE(SUM(quantity), 0) as stock_on_date
@@ -120,16 +146,16 @@ def get_inventory_status_df(store_id: str = None, category: str = None, target_d
     if df.empty:
         return df
 
-    # Deterministic 90-Day Business Rule Calculations
-    # 1. Average Daily Sales over 90 days
+    # Deterministic Business Rule Calculations
+    # 1. Average Daily Sales over available demand window
     df['average_daily_sales'] = df['recent_units_sold'] / float(window_days)
 
-    # 2. Days Remaining / Coverage (Never return infinity or 999.0)
+    # 2. Days Remaining / Coverage (Handle zero demand cleanly)
     def calc_days(row):
         stock = row['current_stock']
         ads = row['average_daily_sales']
         if pd.isna(stock) or stock is None or ads <= 0 or pd.isna(ads):
-            return np.nan
+            return 999.0
         return round(float(stock) / float(ads), 1)
 
     df['days_remaining'] = df.apply(calc_days, axis=1)
@@ -143,10 +169,10 @@ def get_inventory_status_df(store_id: str = None, category: str = None, target_d
 
         if pd.isna(stock) or stock is None:
             return "NO_STOCK_DATA"
-        elif ads <= 0 or pd.isna(days):
-            return "NO_RECENT_DEMAND"
         elif stock <= 0:
             return "OUT_OF_STOCK"
+        elif ads <= 0:
+            return "NO_RECENT_DEMAND"
         elif days <= CRITICAL_DAYS_THRESHOLD:
             return "CRITICAL"
         elif days <= WARNING_DAYS_THRESHOLD:
@@ -179,6 +205,18 @@ def get_inventory_status_df(store_id: str = None, category: str = None, target_d
     df['demand_start_date'] = start_date_str
     df['demand_end_date'] = end_date_str
     df['demand_window_days'] = window_days
+
+    # Debug Logging as required by specifications
+    try:
+        from src.dataset_manager import get_active_dataset_metadata, get_active_dataset_id
+        meta = get_active_dataset_metadata()
+        ds_id = get_active_dataset_id()
+        ds_name = meta.get("dataset_name", "Unknown") if meta else "Unknown"
+        print(f"[INVENTORY] dataset_id: {ds_id} | dataset_name: {ds_name} | latest_date: {end_date_str} | inventory_rows_before_filter: {len(df)} | inventory_rows_after_store_filter: {len(df)} | products_joined: {df['product_id'].nunique()} | stores_joined: {df['store_id'].nunique()}")
+    except Exception:
+        pass
+
+    return df
 
     return df
 
