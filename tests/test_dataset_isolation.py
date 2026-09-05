@@ -131,14 +131,14 @@ class TestDatasetIsolation(unittest.TestCase):
     def test_07_copilot_queries_and_scope(self):
         # Metadata query: how many stores
         q_stores = process_query_intent("How many stores do I have?")
-        self.assertEqual(q_stores["intent"], "DATASET_METADATA")
+        self.assertIn(q_stores["intent"], ["STORE_COUNT", "DATASET_METADATA", "STORE_LIST"])
         self.assertIn("2 stores", q_stores["context_summary"])
         self.assertIn("City Store", q_stores["context_summary"])
         self.assertIn("Mall Store", q_stores["context_summary"])
 
         # Metadata query: how many products
         q_prods = process_query_intent("How many products do I have?")
-        self.assertEqual(q_prods["intent"], "DATASET_METADATA")
+        self.assertIn(q_prods["intent"], ["PRODUCT_COUNT", "DATASET_METADATA", "PRODUCT_LIST"])
         self.assertIn("5 products", q_prods["context_summary"])
 
         # Scope isolation: Mall Store sales

@@ -7,6 +7,7 @@ Implements robust Entity Resolution, Product Family Matching, and Accessory Sepa
 import re
 import datetime
 import logging
+import html
 from typing import Dict, Any, List, Optional, Tuple
 from src.database import query_all, query_one
 from src.query_context import QueryContext
@@ -102,13 +103,16 @@ def get_database_entities():
 
 def get_db_date_bounds():
     """Fetches MIN(date) and MAX(date) from active database."""
+    from src.dataset_manager import ActiveDatasetManager
+    if ActiveDatasetManager.get_active_dataset_id() is None:
+        return None, None
     try:
         row = query_one("SELECT MIN(date) as min_d, MAX(date) as max_d FROM sales")
         if row and row["min_d"] and row["max_d"]:
             return str(row["min_d"]), str(row["max_d"])
     except Exception:
         pass
-    return "2016-01-01", "2026-09-03"
+    return None, None
 
 MONTH_MAP = {
     "january": 1, "jan": 1,
@@ -131,6 +135,14 @@ def parse_date_range(text: str) -> Dict[str, Any]:
     Uses DB MAX(date) as 'latest'/'today'.
     """
     min_db, max_db = get_db_date_bounds()
+    if not min_db or not max_db:
+        return {
+            "start_date": None,
+            "end_date": None,
+            "granularity": "daily",
+            "time_label": "No Data Available",
+            "is_comparison": False
+        }
     min_year = int(min_db.split("-")[0])
     max_year = int(max_db.split("-")[0])
     q = text.lower()
@@ -432,7 +444,13 @@ def extract_entities(text: str, override_store: Optional[str] = None) -> Dict[st
         "current", "last", "past", "next", "full", "dataset", "period", "range", "annual", "daily", "monthly", "yearly", "august 2026"
     }
 
-    STORE_STOP_WORDS = {"store", "stores", "shop", "shops", "outlet", "outlets", "branch", "branches", "location", "locations", "the", "and", "or", "in", "at", "for", "all", "each", "every", "our", "my", "retail"}
+    STORE_STOP_WORDS = {
+        "store", "stores", "shop", "shops", "outlet", "outlets", "branch", "branches",
+        "location", "locations", "the", "and", "or", "in", "at", "for", "all", "each",
+        "every", "our", "my", "retail", "which", "what", "top", "best", "worst", "lowest",
+        "highest", "this", "that", "one", "any", "some", "a", "an", "doing", "performing",
+        "good", "bad", "new", "old", "list", "show", "give", "how", "is", "are", "did", "does"
+    }
 
     # 1. STORE RESOLUTION
     # Check active database stores first (Exact ID, Exact Name, or Distinctive Name Token)
@@ -466,7 +484,7 @@ def extract_entities(text: str, override_store: Optional[str] = None) -> Dict[st
             m_store_pat2 = re.search(r'\b([a-zA-Z0-9\-]+)\s+(?:store|branch|outlet|location|shop)\b', q)
             if m_store_pat2:
                 candidate_st2 = m_store_pat2.group(1).strip()
-                if candidate_st2 not in STORE_STOP_WORDS and candidate_st2 not in ["sales", "performance", "inventory", "stock", "the"]:
+                if candidate_st2.lower() not in STORE_STOP_WORDS and len(candidate_st2) > 2 and candidate_st2.lower() not in ["sales", "performance", "inventory", "stock", "the"]:
                     active_match2 = any(candidate_st2 in s.lower() for s in store_names)
                     if not active_match2:
                         unresolved_store = candidate_st2.title() + " Store"
@@ -539,9 +557,10 @@ def extract_entities(text: str, override_store: Optional[str] = None) -> Dict[st
             
             # Check if candidate is pure date/time or generic query word
             is_date_only = all((w in DATE_WORDS or w.isdigit()) for w in candidate_words) if candidate_words else True
+            is_store_reference = matched_store is not None or any(s in candidate_p_clean.lower() for s in store_names) or any(w in candidate_p_clean.lower().split() for w in STORE_STOP_WORDS)
             is_generic = candidate_p_clean in ["sales", "business", "company", "store", "stores", "everything", "products", "performance", "numbers", "records", "data", ""]
 
-            if candidate_p_clean and not is_date_only and not is_generic:
+            if candidate_p_clean and not is_date_only and not is_generic and not is_store_reference:
                 # Check if it matches any active product
                 if not any(candidate_p_clean in p.lower() for p in prod_names):
                     unresolved_product = candidate_p_clean.title()
@@ -563,18 +582,22 @@ def extract_entities(text: str, override_store: Optional[str] = None) -> Dict[st
 
     if unresolved_product:
         grounding_state = "NO_DATA"
+        safe_p = html.escape(str(unresolved_product))
+        safe_p_clean = html.escape(str(unresolved_product.lower()))
         if matched_store:
-            missing_reason = f"'{unresolved_product}' data was not found in the current dataset ('{dataset_name}'). {matched_store['store_name']} is active, but there are no {unresolved_product.lower()} products in the catalog. Available products are: {', '.join(prod_names)}."
+            missing_reason = f"'{safe_p}' data was not found in the current dataset ('{dataset_name}'). {matched_store['store_name']} is active, but there are no {safe_p_clean} products in the catalog. Available products are: {', '.join(prod_names)}."
         else:
-            missing_reason = f"'{unresolved_product}' data was not found in the current dataset ('{dataset_name}'). I cannot provide {unresolved_product.lower()}-specific sales performance. Available products in the current dataset are: {', '.join(prod_names)}."
+            missing_reason = f"'{safe_p}' data was not found in the current dataset ('{dataset_name}'). I cannot provide {safe_p_clean}-specific sales performance. Available products in the current dataset are: {', '.join(prod_names)}."
         suggested_actions = [f"Try querying one of the available products: {', '.join(prod_names[:3])}"]
     elif unresolved_store:
         grounding_state = "NO_DATA"
-        missing_reason = f"Store '{unresolved_store}' was not found in the current dataset ('{dataset_name}'). Available stores are: {', '.join(store_names)}. I cannot provide store-specific sales performance."
+        safe_st = html.escape(str(unresolved_store))
+        missing_reason = f"Store '{safe_st}' was not found in the current dataset ('{dataset_name}'). Available stores are: {', '.join(store_names)}. I cannot provide store-specific sales performance."
         suggested_actions = [f"Try querying one of the available stores: {', '.join(store_names)}"]
     elif unresolved_category:
         grounding_state = "NO_DATA"
-        missing_reason = f"Category '{unresolved_category}' was not found in the current dataset ('{dataset_name}'). Available categories are: {', '.join(categories)}."
+        safe_cat = html.escape(str(unresolved_category))
+        missing_reason = f"Category '{safe_cat}' was not found in the current dataset ('{dataset_name}'). Available categories are: {', '.join(categories)}."
         suggested_actions = [f"Try querying one of the available categories: {', '.join(categories)}"]
 
     # 5. METRIC & LIMIT EXTRACTION
@@ -610,24 +633,164 @@ def extract_entities(text: str, override_store: Optional[str] = None) -> Dict[st
 
 def classify_intent(text: str, entities: Dict[str, Any], date_info: Dict[str, Any]) -> str:
     """Classifies user query into canonical retail query intent."""
-    q = text.lower()
+    q = text.lower().strip()
 
-    # 0. Direct Dataset Metadata Queries (Requirement 14)
-    if any(k in q for k in [
-        "how many stores", "how many store", "number of stores", "count of stores", "what stores do i have",
-        "which stores do i have", "list my stores", "show my stores", "stores do i have", "my stores", "list stores",
-        "how many products", "how many product", "how many skus", "how many sku", "number of products",
-        "number of skus", "count of products", "what products do i have", "which products do i have",
-        "list my products", "show my products", "products do i have", "list products",
-        "how many sales records", "how many sales transactions", "how many sales rows", "how many transactions",
-        "how many sales records do i have", "how many sales do i have", "how many sales", "total sales records",
-        "how many inventory records", "how many inventory rows", "how many inventory items", "number of inventory records",
-        "total inventory records", "inventory records do i have", "what dataset", "which dataset", "active dataset",
-        "active dataset name", "dataset metadata", "dataset details"
+    # 1. Greetings, Conversational Tokens & Help
+    conversational_tokens = [
+        "hello", "hi", "hey", "greetings", "good morning", "good afternoon", "good evening", "howdy",
+        "thank you", "thanks", "thx", "thank u", "many thanks", "thank you so much", "thanks a lot",
+        "ok", "okay", "great", "nice", "got it", "cool", "perfect", "awesome", "sure", "alright",
+        "bye", "goodbye", "see you", "see ya"
+    ]
+    if q in conversational_tokens or any(q.startswith(t + " ") or q.endswith(" " + t) for t in ["thank you", "thanks", "thx", "bye", "goodbye"]):
+        return "GREETING"
+    if q in ["help", "what can you do", "commands", "how to use", "options", "features", "capabilities"]:
+        return "HELP"
+
+    has_store_word = any(w in q for w in [
+        "store", "stores", "branch", "branches", "location", "locations", "shop", "shops", "outlet", "outlets"
+    ]) or bool(entities.get("store") or entities.get("unresolved_store"))
+
+    # 2. Store Comparison
+    if has_store_word and ("compare" in q or "vs" in q or "comparison" in q or "compared to" in q or "difference between" in q):
+        return "STORE_COMPARISON"
+
+    # 3. Store Performance by Revenue
+    if has_store_word and any(k in q for k in [
+        "most revenue", "highest revenue", "made the most revenue", "generated the most revenue",
+        "highest sales revenue", "top revenue store", "top store by revenue", "store made the most revenue",
+        "store generated the most revenue", "store made the most money", "store has the highest revenue"
     ]):
-        return "DATASET_METADATA"
+        return "STORE_PERFORMANCE_BY_REVENUE"
 
-    # 0.5. Sales Improvement / Optimization / Opportunities Intent
+    # 4. Store Performance by Units
+    if has_store_word and any(k in q for k in [
+        "sold the most units", "sold most units", "most units sold", "highest units", "most units",
+        "highest quantity sold", "sold the most items", "sold the most products", "most volume", "highest volume",
+        "store sold the most", "store sold the most units", "location sold the most", "branch sold the most"
+    ]):
+        return "STORE_PERFORMANCE_BY_UNITS"
+
+    # 5. Store Performance (Rankings / General / Single Store / Best / Worst)
+    is_store_performance_kw = any(k in q for k in [
+        "performing best", "performing worst", "performing well", "performing poorly",
+        "doing best", "doing worst", "doing well", "doing poorly",
+        "best performing", "worst performing", "top performing", "bottom performing",
+        "highest performing", "lowest performing", "underperforming",
+        "performing", "performance", "strongest", "weakest", "successful",
+        "highest sales", "highest selling", "best store", "best stores",
+        "top store", "top stores", "worst store", "worst stores",
+        "store performance", "branch performance", "location performance",
+        "how is", "how are", "how did"
+    ])
+    if has_store_word and is_store_performance_kw:
+        return "STORE_PERFORMANCE"
+
+    if has_store_word and any(k in q for k in [
+        "sales by store", "by store", "stores performed", "store sales", "sales across stores",
+        "which store has the highest", "which store is", "which location is", "which branch is"
+    ]):
+        return "STORE_PERFORMANCE"
+
+    # 6. Direct Store Count Query
+    if any(k in q for k in [
+        "how many stores", "how many store", "number of stores", "count of stores", "how many locations", "number of locations", "how many branches", "count of locations"
+    ]):
+        return "STORE_COUNT"
+
+    # 7. Direct Store List Query (Informational Catalogue Listing ONLY)
+    if any(k in q for k in [
+        "what stores do i have", "which stores do i have", "what stores i have", "which stores i have",
+        "list my stores", "show my stores", "list stores", "show stores", "what stores are available",
+        "what are my stores", "stores do i have", "stores i have", "all stores", "all my stores", "our stores",
+        "list the stores", "show the stores", "stores list", "store list", "list all my stores", "list all stores",
+        "what stores do we have", "give me list of stores", "give me a list of stores"
+    ]) or (has_store_word and any(w in q for w in ["list", "show", "what", "which", "available"]) and not any(w in q for w in ["perform", "sales", "revenue", "rank", "best", "worst", "top", "unit", "doing", "vs", "compare"])):
+        return "STORE_LIST"
+
+    # 8. Direct Product Count Query
+    if any(k in q for k in [
+        "how many products", "how many product", "how many skus", "how many sku", "how many items", "how many item",
+        "number of products", "number of skus", "number of items", "count of products", "count of items", "count of skus"
+    ]):
+        return "PRODUCT_COUNT"
+
+    # 9. Direct Inventory Summary / Stock Count Query
+    if any(k in q for k in [
+        "how much stock", "how much inventory", "what is my total stock", "what is total stock",
+        "total stock on hand", "total inventory", "total stock", "stock do i have", "inventory do i have",
+        "how many stock units", "how many units in stock", "stock on hand", "total units on hand"
+    ]):
+        return "INVENTORY_SUMMARY"
+
+    # Specific negative words that indicate a ranking/performance/operational/sales query rather than an informational catalogue list
+    is_ranking_or_perf = any(k in q for k in [
+        "sold the most", "sold most", "sells the most", "sells most", "most sold", "highest revenue",
+        "most revenue", "best seller", "best-seller", "best selling", "top seller", "top performing",
+        "worst performing", "sold least", "revenue of", "sales of", "sales at", "sales in", "sales for",
+        "revenue at", "revenue in", "revenue for", "sales", "revenue", "reorder", "replenish", "overstock",
+        "overstocked", "attention", "grow", "growth", "why", "performance of", "how did", "how does",
+        "how many", "count", "number of", "how much", "how are", "trend", "trajectory"
+    ])
+
+    # 10. Direct Product / Item List Query (PRODUCT_LIST)
+    if (
+        any(k in q for k in [
+            "what items do i have", "what items do we have", "what items i have", "what items are available",
+            "what products do i have", "what products do we have", "what products i have", "which products do i have",
+            "which items do i have", "which products do we have", "products do i have", "items do i have",
+            "products i have", "items i have", "list my products", "list my items", "show my products",
+            "show my items", "show all products", "show all items", "show all my products", "show all my items",
+            "list products", "list items", "list all products", "list all items", "products are available",
+            "items are available", "products in my catalogue", "products in my catalog", "items in my catalogue",
+            "items in my catalog", "products in catalogue", "products in catalog", "give me list if items",
+            "give me list of items", "give me a list of items", "give me list of products", "give me a list of products",
+            "give me products", "give me items", "products available", "items available",
+            "show my products with stock", "show products with stock", "products with stock", "items with stock",
+            "what products are in stock", "what items are in stock", "which products are in stock", "which items are in stock",
+            "what items do you have", "what products do you have", "list catalogue", "show catalogue", "product catalogue",
+            "product list", "items list", "list of items", "list if items"
+        ])
+        or (
+            any(w in q for w in ["list", "show", "give", "display", "what", "which", "view", "available"])
+            and any(w in q for w in ["item", "items", "product", "products", "sku", "skus", "catalogue", "catalog"])
+            and not is_ranking_or_perf
+        )
+    ):
+        return "PRODUCT_LIST"
+
+    # 11. Top Product by Units vs Revenue
+    if any(k in q for k in [
+        "sold the most", "sold most", "sells the most", "sells most", "most sold", "most units",
+        "highest units", "highest quantity", "most volume", "which product sold the most", "which item sold the most",
+        "which one sells the most", "what product sold the most", "what item sold the most", "most sold product",
+        "most sold item", "best selling product by units"
+    ]):
+        return "TOP_PRODUCT_BY_UNITS"
+
+    if any(k in q for k in [
+        "most revenue", "highest revenue", "generated the most revenue", "generated most revenue",
+        "made the most revenue", "made the most money", "highest sales amount", "which product generated the most revenue",
+        "which item generated the most revenue", "which product made the most", "which item made the most",
+        "highest revenue product", "highest revenue item", "top product by revenue"
+    ]):
+        return "TOP_PRODUCT_BY_REVENUE"
+
+    # 12. Reorder, Low Stock, Overstock, Slow Moving, Attention Today
+    if any(k in q for k in ["attention", "priority", "urgent", "problems", "issues", "what needs my attention", "attention today", "what needs attention"]):
+        return "ATTENTION_TODAY"
+    if any(k in q for k in ["reorder", "replenish", "purchase order", "buy more", "which products should i reorder", "which ones should i reorder", "what should i reorder", "products should i reorder", "items should i reorder"]):
+        return "REORDER"
+    if any(k in q for k in ["low stock", "running out", "running low", "critical stock", "stockout risk"]):
+        return "LOW_STOCK"
+    if any(k in q for k in ["overstock", "overstocked", "excess inventory", "too much stock", "which are overstocked", "which products are overstocked", "products are overstocked", "items are overstocked"]):
+        return "OVERSTOCK"
+    if any(k in q for k in ["slow moving", "slow-moving", "slowest moving", "dead inventory"]):
+        return "SLOW_MOVING"
+    if any(k in q for k in ["inventory level", "stock level", "stock coverage", "days of stock", "today's inventory"]):
+        return "INVENTORY_SNAPSHOT"
+
+    # 13. Sales Improvement & Opportunity
     if any(k in q for k in [
         "improve sales", "improve the sales", "increase sales", "increase revenue", "improve revenue",
         "what can i do", "what should i do", "what should i focus", "where should i focus",
@@ -638,15 +801,15 @@ def classify_intent(text: str, entities: Dict[str, Any], date_info: Dict[str, An
     ]):
         return "SALES_IMPROVEMENT"
 
-    # 1. Why / Causal Query / Driver Analysis
+    # 14. Causal / Why Analysis
     if any(k in q for k in ["why did", "why has", "why is", "reason for", "cause of", "what caused", "what is driving", "driving sales", "driving revenue", "why are", "what explains"]):
         return "CAUSAL_ANALYSIS"
 
-    # 2. Seasonality
+    # 15. Seasonality
     if any(k in q for k in ["seasonality", "seasonal", "monthly pattern", "best month", "demand pattern"]):
         return "SEASONALITY"
 
-    # 3. Comparisons
+    # 16. Comparisons
     if date_info.get("is_comparison") or "vs" in q or "compare" in q or "comparison" in q:
         if entities.get("matched_products"):
             return "PRODUCT_COMPARISON"
@@ -654,42 +817,23 @@ def classify_intent(text: str, entities: Dict[str, Any], date_info: Dict[str, An
             return "STORE_COMPARISON"
         return "YEAR_COMPARISON"
 
-    # 4. Inventory / Reorder / Risk / Attention
-    if any(k in q for k in ["attention", "priority", "urgent", "problems", "issues"]):
-        return "ATTENTION_ITEMS"
-    if any(k in q for k in ["reorder", "replenish", "purchase order", "buy more"]):
-        return "REORDER"
-    if any(k in q for k in ["low stock", "running out", "running low", "critical stock", "stockout risk"]):
-        return "LOW_STOCK"
-    if any(k in q for k in ["overstock", "excess inventory", "too much stock", "dead inventory", "slow moving", "slow-moving", "slowest moving"]):
-        return "OVERSTOCK"
-    if any(k in q for k in ["inventory", "stock level", "stock coverage", "days of stock", "today's inventory"]):
-        return "INVENTORY_SNAPSHOT"
-
-    # 5. Category Performance
+    # 17. Top Categories
     if any(k in q for k in ["top category", "best category", "category performance", "categories", "which category", "sales by category", "by category"]):
         return "TOP_CATEGORIES"
 
-    # 6. Store Performance & Network Catalog
-    if any(k in q for k in [
-        "top store", "best store", "store performance", "which store", "which location", "sales by store", "by store", "sells the most",
-        "what stores", "which stores", "list stores", "stores in", "stores do i have", "my stores", "all stores", "show stores", "retail network", "our stores", "locations"
-    ]):
-        if not entities.get("matched_products") and not entities.get("unresolved_product") and not ("laptop" in q or "product" in q or "sku" in q):
-            return "STORE_PERFORMANCE"
+    # 18. Store Performance Fallback
+    if any(k in q for k in ["top store", "best store", "store performance", "which store", "which location", "sales by store", "by store", "stores performed"]):
+        return "STORE_PERFORMANCE"
 
-    # 7. Product Rankings & Sales Performance / Catalog Queries
+    # 19. Top Products (General Rankings)
     if any(k in q for k in [
         "top product", "best product", "best performer", "top performer", "best seller", "best-selling",
-        "highest revenue product", "most sold product", "top skus", "worst performer", "worst product",
-        "top 5 products", "top 10 products", "best sku", "performing product", "performing item",
-        "made the most revenue", "sells the most", "sku is performing", "best performing item", "best performing product",
-        "what products", "which products", "what product", "which product", "list products", "products in my",
-        "products do i have", "product catalog", "products in catalog", "my products", "all products", "show products"
-    ]) or (any(w in q for w in ["product", "sku", "item"]) and any(w in q for w in ["best", "most", "top", "performing", "lead", "highest", "revenue", "units", "catalog", "have", "in"])):
-        if not entities.get("unresolved_product"):
-            return "TOP_PRODUCTS"
+        "top skus", "worst performer", "worst product", "top 5 products", "top 10 products", "best sku",
+        "performing product", "performing item", "best performing item", "best performing product"
+    ]):
+        return "TOP_PRODUCTS"
 
+    # 20. Specific Product or Store Performance
     if entities.get("product") or entities.get("matched_products") or entities.get("unresolved_product"):
         if any(k in q for k in ["best", "top", "lead", "highest", "winner"]):
             return "TOP_PRODUCTS"
@@ -697,14 +841,37 @@ def classify_intent(text: str, entities: Dict[str, Any], date_info: Dict[str, An
             return "STORE_PERFORMANCE"
         return "PRODUCT_PERFORMANCE"
 
-    # 8. Sales Trend
+    # 21. Sales Trend
     if any(k in q for k in ["trend", "trajectory", "over time", "history", "historical", "last 10 years", "last 5 years", "grew", "changed"]):
         return "SALES_TREND"
 
-    # 9. General Summary
+    # 22. Dataset Metadata & Details
+    if any(k in q for k in [
+        "how many sales records", "how many sales transactions", "how many sales rows", "how many transactions",
+        "how many sales records do i have", "how many sales do i have", "total sales records",
+        "how many inventory records", "how many inventory rows", "how many inventory items", "number of inventory records",
+        "total inventory records", "inventory records do i have", "what dataset", "which dataset", "active dataset",
+        "active dataset name", "dataset metadata", "dataset details"
+    ]):
+        return "DATASET_METADATA"
+
+    # 23. General Summary
     if any(k in q for k in ["summary", "overview", "business performing", "how are we doing", "general status"]):
         return "GENERAL_SUMMARY"
 
+    # 24. Retail Intent Guard - verify presence of retail domain terms or resolved entities
+    has_retail_intent = any(k in q for k in [
+        "sale", "sales", "revenue", "unit", "units", "quantity", "inventory", "stock", "reorder",
+        "store", "stores", "product", "products", "item", "items", "sku", "category", "categories",
+        "performance", "performing", "growth", "trend", "spike", "drop", "critical", "warning",
+        "overstock", "slow", "summary", "overview", "kpi", "metrics", "catalog", "catalogue", "today",
+        "yesterday", "month", "year", "date", "money", "earned", "cost", "profit"
+    ]) or bool(entities.get("matched_products") or entities.get("matched_store") or entities.get("matched_category"))
+
+    if not has_retail_intent:
+        return "CLARIFICATION_NEEDED"
+
+    # 25. Default Sales Summary (only when retail context is present)
     return "SALES_SUMMARY"
 
 def build_query_spec(question: str, override_store: Optional[str] = None, override_date: Optional[str] = None) -> Dict[str, Any]:

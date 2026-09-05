@@ -47,6 +47,8 @@ def get_attention_items() -> List[Dict[str, Any]]:
                 "current_stock": stock,
                 "avg_daily_sales": ads,
                 "days_remaining": days,
+                "action": action,
+                "evidence": reason,
                 "recommended_action": action,
                 "reason": reason,
                 "assumption": f"{TARGET_COVERAGE_DAYS}-day target inventory coverage."
@@ -76,6 +78,8 @@ def get_attention_items() -> List[Dict[str, Any]]:
                 "current_stock": stock,
                 "avg_daily_sales": ads,
                 "days_remaining": days,
+                "action": action,
+                "evidence": reason,
                 "recommended_action": action,
                 "reason": reason,
                 "assumption": f"{TARGET_COVERAGE_DAYS}-day target inventory coverage."
@@ -103,6 +107,8 @@ def get_attention_items() -> List[Dict[str, Any]]:
             "current_stock": "N/A",
             "avg_daily_sales": round(curr_u / 30.0, 2),
             "days_remaining": "N/A",
+            "action": action,
+            "evidence": reason,
             "recommended_action": action,
             "reason": reason,
             "assumption": "Comparing last 30 days volume against previous 30-day baseline."
@@ -130,6 +136,8 @@ def get_attention_items() -> List[Dict[str, Any]]:
             "current_stock": "N/A",
             "avg_daily_sales": round(curr_u / 30.0, 2),
             "days_remaining": "N/A",
+            "action": action,
+            "evidence": reason,
             "recommended_action": action,
             "reason": reason,
             "assumption": "Comparing last 30 days volume against previous 30-day baseline."
@@ -157,6 +165,8 @@ def get_attention_items() -> List[Dict[str, Any]]:
             "current_stock": stock,
             "avg_daily_sales": round(sold / 30.0, 2),
             "days_remaining": s_item['days_remaining'],
+            "action": action,
+            "evidence": reason,
             "recommended_action": action,
             "reason": reason,
             "assumption": "Threshold: < 5 units sold in 30 days with >= 20 units stock."

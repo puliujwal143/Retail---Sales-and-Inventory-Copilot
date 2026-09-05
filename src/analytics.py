@@ -50,10 +50,10 @@ def get_dashboard_summary(store_id: str = None, target_date: str = None) -> Dict
 
     # Check DB date bounds
     bounds = query_one("SELECT MIN(date) as min_date, MAX(date) as max_date FROM sales")
-    min_date = str(bounds["min_date"]) if bounds and bounds.get("min_date") else "2026-01-01"
-    max_date = str(bounds["max_date"]) if bounds and bounds.get("max_date") else "2026-01-01"
+    min_date = str(bounds["min_date"]) if bounds and bounds.get("min_date") else None
+    max_date = str(bounds["max_date"]) if bounds and bounds.get("max_date") else None
 
-    if target_date:
+    if target_date and min_date and max_date:
         if target_date > max_date and target_date.startswith(max_date[:4]):
             target_date = max_date
         elif target_date < min_date or target_date > max_date:

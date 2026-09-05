@@ -10,7 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
         inventoryData: [],
         dashboardData: null,
         storesData: [],
-        compareSelectedStores: ["STR001", "STR002", "STR003"]
+        compareSelectedStores: []
     };
 
     // DOM References
@@ -58,6 +58,36 @@ document.addEventListener("DOMContentLoaded", () => {
     // =========================================================================
     // ACTIVE DATASET MANAGEMENT & DYNAMIC STATE SYNC
     // =========================================================================
+
+    async function onDatasetChanged() {
+        // Reset state filters & selections
+        state.selectedStore = "all";
+        state.selectedCategory = "all";
+        state.selectedPriority = "all";
+        state.selectedDate = null;
+        state.storesData = [];
+        state.productsData = [];
+        state.inventoryData = [];
+
+        // Clear copilot chat history & messages
+        const chatContainer = document.getElementById("copilot-messages");
+        if (chatContainer) {
+            chatContainer.innerHTML = "";
+            appendCopilotMessage("system", "Active dataset state updated. All views, caches, and AI context have been refreshed.");
+        }
+
+        // Reset global inputs
+        if (globalStoreSelect) globalStoreSelect.value = "all";
+        const dateInput = document.getElementById("snapshot-date-input");
+        if (dateInput) dateInput.value = "";
+        const dateBanner = document.getElementById("snapshot-banner");
+        if (dateBanner) dateBanner.classList.add("hidden");
+
+        // Reload active dataset header, store dropdowns, catalogue, and all views
+        await loadActiveDatasetHeader();
+        await loadStores();
+        await loadAllViews();
+    }
 
     async function loadActiveDatasetHeader() {
         try {
@@ -121,8 +151,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 salesStoreSelect.value = state.selectedStore;
             }
 
-            // Update compare checkboxes
-            state.compareSelectedStores = stores.slice(0, Math.min(3, stores.length)).map(s => s.store_id);
+            // Update compare checkboxes (select all stores by default)
+            state.compareSelectedStores = stores.map(s => s.store_id);
             setupStoreComparison();
         } catch (e) {
             console.error("Error loading stores:", e);
@@ -1501,7 +1531,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (salesRevEl) salesRevEl.textContent = `₹${revSum.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
             if (salesUnitsEl) salesUnitsEl.textContent = unitSum.toLocaleString();
             if (salesDailyEl) salesDailyEl.textContent = `₹${dailyAvg.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
-            if (salesTopCatEl) salesTopCatEl.textContent = data.category_chart?.labels?.[0] || "Computers";
+            if (salesTopCatEl) salesTopCatEl.textContent = data.category_chart?.labels?.[0] || "N/A";
 
             if (data.revenue_trend) renderSVGChart("chart-sales-revenue", data.revenue_trend);
             if (data.units_trend) renderSVGChart("chart-sales-units", data.units_trend);
@@ -1521,11 +1551,23 @@ document.addEventListener("DOMContentLoaded", () => {
                 let seasonUrl = `/api/seasonality?store_id=${state.selectedStore}`;
                 const seasonRes = await fetch(seasonUrl);
                 const seasonData = await seasonRes.json();
-                if (seasonData && seasonData.seasonality_chart) {
-                    renderSVGChart("chart-sales-seasonality", seasonData.seasonality_chart);
+                if (seasonData) {
+                    if (seasonData.status === "INSUFFICIENT_HISTORY") {
+                        const seasonContainer = document.getElementById("chart-sales-seasonality");
+                        if (seasonContainer) {
+                            seasonContainer.innerHTML = `
+                                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; min-height:160px; color:var(--text-muted); text-align:center; padding:20px;">
+                                    <div style="font-size:13px; font-weight:700; color:var(--text-secondary); margin-bottom:4px;">Seasonality Unavailable</div>
+                                    <div style="font-size:11px; color:var(--text-muted); max-width:320px;">${seasonData.message || "Not enough historical data in the active dataset to calculate a reliable seasonal pattern."}</div>
+                                </div>
+                            `;
+                        }
+                    } else if (seasonData.seasonality_chart) {
+                        renderSVGChart("chart-sales-seasonality", seasonData.seasonality_chart);
+                    }
                 }
             } catch (errYearly) {
-                console.error("Yearly chart render error:", errYearly);
+                console.error("Yearly / Seasonality chart render error:", errYearly);
             }
 
             const spikesContainer = document.getElementById("spikes-drops-container");
@@ -1946,10 +1988,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!container) return;
         
         if (!chartSpec || !chartSpec.labels || chartSpec.labels.length === 0 || (chartSpec.datasets && chartSpec.datasets.every(d => !d.data || d.data.length === 0 || d.data.every(v => v === 0)))) {
+            const titleMsg = chartSpec?.title || "No sales data available";
+            const subMsg = chartSpec?.subtitle || "Upload a retail dataset to see revenue and sales trends.";
             container.innerHTML = `
                 <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; min-height:160px; color:var(--text-muted); text-align:center; padding:20px;">
-                    <div style="font-size:13px; font-weight:700; color:var(--text-secondary); margin-bottom:4px;">No sales data available</div>
-                    <div style="font-size:11px; color:var(--text-muted);">Upload a retail dataset to see revenue and sales trends.</div>
+                    <div style="font-size:13px; font-weight:700; color:var(--text-secondary); margin-bottom:4px;">${titleMsg}</div>
+                    <div style="font-size:11px; color:var(--text-muted);">${subMsg}</div>
                 </div>
             `;
             return;
@@ -2373,13 +2417,24 @@ document.addEventListener("DOMContentLoaded", () => {
         const welcomeCard = document.getElementById("copilot-welcome-card");
         const loadingCard = document.getElementById("ai-loading-indicator");
 
+    function escapeHTML(str) {
+        if (str === null || str === undefined) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    async function sendChatQuery(userQuery) {
         if (!messagesContainer) return;
         if (welcomeCard) welcomeCard.style.display = "none";
 
-        // User Message
+        // User Message - Safely escaped
         const userMsgDiv = document.createElement("div");
         userMsgDiv.className = "chat-message user-message";
-        userMsgDiv.innerHTML = `<div>${userQuery}</div>`;
+        userMsgDiv.textContent = userQuery;
         messagesContainer.appendChild(userMsgDiv);
 
         if (loadingCard) {
@@ -2442,7 +2497,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         let scopeHTML = "";
         if (data.data_scope) {
-            scopeHTML = `<div style="font-size:11px; font-weight:700; color:var(--brand-teal); background:#ECFDF5; border:1px solid #A7F3D0; padding:4px 8px; border-radius:4px; margin-bottom:8px; display:inline-block;">📊 ${data.data_scope}</div>`;
+            scopeHTML = `<div style="font-size:11px; font-weight:700; color:var(--brand-teal); background:#ECFDF5; border:1px solid #A7F3D0; padding:4px 8px; border-radius:4px; margin-bottom:8px; display:inline-block;">📊 ${escapeHTML(data.data_scope)}</div>`;
         }
 
         let metricsHTML = "";
@@ -2451,8 +2506,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div style="display:flex; flex-wrap:wrap; gap:8px; margin: 10px 0;">
                     ${data.key_metrics.map(m => `
                         <div style="background:#FFFFFF; border:1px solid var(--border-color); padding:6px 12px; border-radius:6px; font-size:11px;">
-                            <div style="color:var(--text-muted); font-size:10px;">${m.label}</div>
-                            <div style="font-weight:700; color:var(--text-primary);">${m.value}</div>
+                            <div style="color:var(--text-muted); font-size:10px;">${escapeHTML(m.label)}</div>
+                            <div style="font-weight:700; color:var(--text-primary);">${escapeHTML(m.value)}</div>
                         </div>
                     `).join("")}
                 </div>
@@ -2465,7 +2520,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div style="background:var(--brand-teal-bg); border-left:3px solid var(--brand-teal); padding:10px 14px; border-radius:6px; font-size:12px; margin:10px 0; color:var(--text-secondary);">
                     <div style="color:var(--brand-teal); font-weight:700; font-size:11px; text-transform:uppercase;">💡 Action Plan:</div>
                     <ul style="padding-left:16px; margin-top:4px;">
-                        ${data.recommendations.map(r => `<li>${r}</li>`).join("")}
+                        ${data.recommendations.map(r => `<li>${escapeHTML(r)}</li>`).join("")}
                     </ul>
                 </div>
             `;
@@ -2474,7 +2529,7 @@ document.addEventListener("DOMContentLoaded", () => {
         let chartContainerId = `chat-chart-${Date.now()}`;
         let chartHTML = data.chart ? `
             <div style="background:#FFFFFF; border:1px solid var(--border-color); padding:14px; border-radius:8px; margin:12px 0;">
-                <div style="font-size:12px; font-weight:700; color:var(--text-primary); margin-bottom:8px;">${data.chart.title}</div>
+                <div style="font-size:12px; font-weight:700; color:var(--text-primary); margin-bottom:8px;">${escapeHTML(data.chart.title)}</div>
                 <div id="${chartContainerId}" class="svg-chart-container" style="height:180px;"></div>
             </div>
         ` : "";
@@ -2486,17 +2541,17 @@ document.addEventListener("DOMContentLoaded", () => {
                     <summary style="cursor:pointer; font-weight:600; color:var(--text-secondary);">🔍 Supporting Evidence (${data.evidence.length} items)</summary>
                     <div style="margin-top:8px; display:flex; flex-direction:column; gap:4px;">
                         ${data.evidence.map(e => {
-                            if (typeof e === 'string') return `<div style="background:#FFFFFF; border:1px solid var(--border-color); padding:4px 8px; border-radius:4px;">${e}</div>`;
+                            if (typeof e === 'string') return `<div style="background:#FFFFFF; border:1px solid var(--border-color); padding:4px 8px; border-radius:4px;">${escapeHTML(e)}</div>`;
                             return `
                             <div style="background:#FFFFFF; border:1px solid var(--border-color); padding:6px 10px; border-radius:4px; display:flex; flex-wrap:wrap; gap:8px;">
-                                ${e.year ? `<div><strong>Year:</strong> ${e.year}</div>` : ''}
-                                ${e.product_name ? `<div><strong>Product:</strong> ${e.product_name}</div>` : ''}
-                                ${e.store_name ? `<div><strong>Store:</strong> ${e.store_name}</div>` : ''}
-                                ${e.revenue !== undefined ? `<div><strong>Revenue:</strong> ${typeof e.revenue === 'number' ? '₹' + Math.round(e.revenue).toLocaleString('en-IN') : e.revenue}</div>` : ''}
-                                ${e.units_sold !== undefined ? `<div><strong>Units:</strong> ${typeof e.units_sold === 'number' ? e.units_sold.toLocaleString() : e.units_sold}</div>` : ''}
-                                ${e.current_stock !== undefined && e.current_stock !== "N/A" ? `<div><strong>Stock:</strong> ${e.current_stock}</div>` : ''}
-                                ${e.avg_daily_sales !== undefined && e.avg_daily_sales !== 0 ? `<div><strong>Avg Daily:</strong> ${e.avg_daily_sales}</div>` : ''}
-                                ${e.source ? `<div><strong>Source:</strong> ${e.source}</div>` : ''}
+                                ${e.year ? `<div><strong>Year:</strong> ${escapeHTML(e.year)}</div>` : ''}
+                                ${e.product_name ? `<div><strong>Product:</strong> ${escapeHTML(e.product_name)}</div>` : ''}
+                                ${e.store_name ? `<div><strong>Store:</strong> ${escapeHTML(e.store_name)}</div>` : ''}
+                                ${e.revenue !== undefined ? `<div><strong>Revenue:</strong> ${escapeHTML(typeof e.revenue === 'number' ? '₹' + Math.round(e.revenue).toLocaleString('en-IN') : e.revenue)}</div>` : ''}
+                                ${e.units_sold !== undefined ? `<div><strong>Units:</strong> ${escapeHTML(typeof e.units_sold === 'number' ? e.units_sold.toLocaleString() : e.units_sold)}</div>` : ''}
+                                ${e.current_stock !== undefined && e.current_stock !== "N/A" ? `<div><strong>Stock:</strong> ${escapeHTML(e.current_stock)}</div>` : ''}
+                                ${e.avg_daily_sales !== undefined && e.avg_daily_sales !== 0 ? `<div><strong>Avg Daily:</strong> ${escapeHTML(e.avg_daily_sales)}</div>` : ''}
+                                ${e.source ? `<div><strong>Source:</strong> ${escapeHTML(e.source)}</div>` : ''}
                             </div>`;
                         }).join("")}
                     </div>
@@ -2510,7 +2565,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${scopeHTML}
             </div>
             <div style="font-size: 13px; line-height: 1.55; color: var(--text-primary);">
-                ${data.answer}
+                ${escapeHTML(data.answer)}
             </div>
             ${metricsHTML}
             ${recsHTML}

@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import html
 from typing import Dict, Any
 
 logger = logging.getLogger("retailiq.gemini")
@@ -9,17 +10,21 @@ SYSTEM_PROMPT = """You are a retail analytics assistant for a store manager runn
 
 CRITICAL GROUNDING RULES:
 1. Use ONLY the evidence supplied in the prompt context.
-2. NEVER replace requested product family items with accessories (e.g., do NOT mention 'Laptop Bag' when explaining 'Laptop Computers' unless specifically asked).
-3. Never invent sales, inventory, prices, products, stores, causes, or recommendations.
-4. Do NOT perform business calculations if calculated values are already supplied by the system.
-5. If the supplied evidence does not contain enough information to answer the question (e.g. asking why sales increased when no promotional or marketing data is in the evidence), EXPLICITLY state that the available data is insufficient to answer the cause.
-6. Do NOT infer causes or external factors (promotions, weather, ads, competitors) that are not supported by the evidence.
-7. Every factual statement must be supported by supplied figures.
-8. Mention relevant system assumptions (e.g., 90-day recent demand basis, 7-day target inventory coverage, 30-day overstock threshold).
-9. You are an explanation layer over a deterministic retail analytics system, NOT the source of truth.
-10. For inventory decision queries (Overstock, Low Stock, Reorder), explicitly mention `Demand Basis: Last 90 days (YYYY-MM-DD to YYYY-MM-DD)`.
-11. NEVER recommend reorders for overstocked products (>30 days coverage). Recommend pausing replenishment or inter-store transfers instead.
-12. For running-low products, present the explicit 7-day reorder math (`Target Stock = 7 * daily_sales`, `Reorder = Target - Stock`).
+2. For PRODUCT_LIST, STORE_LIST, PRODUCT_COUNT, and INVENTORY_SUMMARY:
+   - Answer directly by presenting the items, categories, or stock on hand.
+   - Do NOT add unrequested revenue, units sold, sales rankings, reorder recommendations, action plans, or charts.
+   - If the supplied recommendations array is empty, return "recommendations": [].
+3. NEVER replace requested product family items with accessories (e.g., do NOT mention 'Laptop Bag' when explaining 'Laptop Computers' unless specifically asked).
+4. Never invent sales, inventory, prices, products, stores, causes, or recommendations.
+5. Do NOT perform business calculations if calculated values are already supplied by the system.
+6. If the supplied evidence does not contain enough information to answer the question (e.g. asking why sales increased when no promotional or marketing data is in the evidence), EXPLICITLY state that the available data is insufficient to answer the cause.
+7. Do NOT infer causes or external factors (promotions, weather, ads, competitors) that are not supported by the evidence.
+8. Every factual statement must be supported by supplied figures.
+9. Mention relevant system assumptions (e.g., 90-day recent demand basis, 7-day target inventory coverage, 30-day overstock threshold).
+10. You are an explanation layer over a deterministic retail analytics system, NOT the source of truth.
+11. For inventory decision queries (Overstock, Low Stock, Reorder), explicitly mention `Demand Basis: Last 90 days (YYYY-MM-DD to YYYY-MM-DD)`.
+12. NEVER recommend reorders for overstocked products (>30 days coverage). Recommend pausing replenishment or inter-store transfers instead.
+13. For running-low products, present the explicit 7-day reorder math (`Target Stock = 7 * daily_sales`, `Reorder = Target - Stock`).
 
 You MUST respond strictly in valid JSON format with the following keys:
 {
@@ -28,8 +33,7 @@ You MUST respond strictly in valid JSON format with the following keys:
     {"label": "Metric Name", "value": "Metric Value"}
   ],
   "recommendations": [
-    "Actionable recommendation 1",
-    "Actionable recommendation 2"
+    "Actionable recommendation 1"
   ],
   "evidence": [
     {
@@ -53,17 +57,21 @@ def generate_copilot_response(processed_query: Dict[str, Any]) -> Dict[str, Any]
     Falls back gracefully to deterministic python response if Gemini key is absent or request fails.
     Strictly prevents hallucination for NO_DATA grounding states.
     """
+    intent = processed_query.get("intent", "SALES_SUMMARY")
     grounding_state = processed_query.get("grounding_state", "DATA_FOUND")
     context_summary = processed_query.get("context_summary", "")
     data_scope = processed_query.get("data_scope", "")
     assumptions = processed_query.get("assumptions", [])
     recommendations = processed_query.get("recommendations", [])
+    metrics = processed_query.get("metrics", [])
+    evidence = processed_query.get("evidence", [])
+    chart = processed_query.get("chart", None)
 
     # If NO_DATA state is flagged, return grounded response directly without hallucination risk
     if grounding_state == "NO_DATA":
         ans = processed_query.get("answer") or context_summary or "I don't have an active retail dataset yet. Please upload your sales and inventory data before I can answer this."
         return {
-            "intent": processed_query.get("intent", "SALES_SUMMARY"),
+            "intent": intent,
             "grounding_state": "NO_DATA",
             "answer": ans,
             "data_scope": data_scope,
@@ -75,6 +83,26 @@ def generate_copilot_response(processed_query: Dict[str, Any]) -> Dict[str, Any]
             "chart": None
         }
 
+    # For deterministic catalogue lists, store rankings, and greetings/help/clarification, return deterministic grounded answer directly
+    if intent in [
+        "PRODUCT_LIST", "PRODUCT_COUNT", "STORE_LIST", "STORE_COUNT",
+        "STORE_PERFORMANCE", "STORE_PERFORMANCE_BY_REVENUE", "STORE_PERFORMANCE_BY_UNITS", "STORE_COMPARISON",
+        "INVENTORY_SUMMARY", "TOP_PRODUCT_BY_UNITS", "TOP_PRODUCT_BY_REVENUE",
+        "GREETING", "HELP", "CLARIFICATION_NEEDED"
+    ]:
+        return {
+            "intent": intent,
+            "grounding_state": grounding_state,
+            "answer": context_summary,
+            "data_scope": data_scope,
+            "key_metrics": metrics,
+            "recommendations": recommendations,
+            "evidence": evidence,
+            "assumptions": assumptions,
+            "data_sufficiency": data_sufficiency if "data_sufficiency" in locals() else "sufficient",
+            "chart": chart
+        }
+
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
 
     # If API key missing, immediately return deterministic fallback
@@ -84,12 +112,7 @@ def generate_copilot_response(processed_query: Dict[str, Any]) -> Dict[str, Any]
 
     # Prepare prompt context
     user_query = processed_query.get("user_query", "")
-    intent = processed_query.get("intent", "")
     data_sufficiency = processed_query.get("data_sufficiency", "sufficient")
-    evidence = processed_query.get("evidence", [])
-    metrics = processed_query.get("metrics", [])
-    chart = processed_query.get("chart", None)
-
     structured_ev = processed_query.get("structured_evidence", {})
 
     prompt_content = f"""USER QUESTION: "{user_query}"
@@ -162,6 +185,13 @@ Remember: Respond ONLY with valid JSON following the schema. Directly answer the
             parsed_json["intent"] = intent
             parsed_json["grounding_state"] = grounding_state
             parsed_json["chart"] = chart
+
+            # Post-validation checks: Ensure unrequested recommendations and charts are suppressed
+            if not recommendations:
+                parsed_json["recommendations"] = []
+            if chart is None:
+                parsed_json["chart"] = None
+
             return parsed_json
         else:
             logger.warning("Gemini returned non-JSON string. Falling back to deterministic output.")
@@ -218,14 +248,35 @@ def create_deterministic_fallback(processed_query: Dict[str, Any], note: str = "
             "chart": None
         }
 
+    # Direct formats for informational intents
+    if intent in [
+        "PRODUCT_LIST", "PRODUCT_COUNT", "STORE_LIST", "STORE_COUNT", "INVENTORY_SUMMARY",
+        "TOP_PRODUCT_BY_UNITS", "TOP_PRODUCT_BY_REVENUE",
+        "STORE_PERFORMANCE", "STORE_PERFORMANCE_BY_REVENUE", "STORE_PERFORMANCE_BY_UNITS", "STORE_COMPARISON",
+        "GREETING", "HELP", "CLARIFICATION_NEEDED"
+    ]:
+        return {
+            "intent": intent,
+            "grounding_state": grounding_state,
+            "answer": context_summary,
+            "data_scope": data_scope,
+            "key_metrics": metrics,
+            "recommendations": recommendations,
+            "evidence": evidence,
+            "assumptions": assumptions,
+            "data_sufficiency": data_sufficiency,
+            "chart": chart
+        }
+
+    safe_query = html.escape(str(user_query).strip())
     if data_sufficiency == "insufficient":
         answer = (
-            f"Regarding '{user_query}': {context_summary} "
+            f"Regarding '{safe_query}': {context_summary} "
             f"The dataset contains sales transaction history and inventory stock levels, but does NOT contain "
             f"marketing campaigns, advertisements, price changes, or competitor data. Therefore, the specific root cause cannot be determined without inventing unverified facts."
         )
     else:
-        answer = f"Analysis for query '{user_query}': {context_summary}"
+        answer = f"Analysis for query '{safe_query}': {context_summary}"
         if recommendations:
             answer += f" Key action: {recommendations[0]}"
 

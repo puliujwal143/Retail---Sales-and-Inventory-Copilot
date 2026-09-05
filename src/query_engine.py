@@ -6,12 +6,15 @@ from src.query_planner import build_query_spec, get_db_date_bounds
 from src.analytics_engine import execute_query_spec
 from src.response_engine import format_copilot_payload
 
-def get_database_bounds() -> Tuple[str, str, int]:
+def get_database_bounds() -> Tuple[Optional[str], Optional[str], int]:
     """Returns MIN(date), MAX(date), and total records count in sales table."""
+    from src.dataset_manager import ActiveDatasetManager
+    if ActiveDatasetManager.get_active_dataset_id() is None:
+        return None, None, 0
     row = query_one("SELECT MIN(date) as min_date, MAX(date) as max_date, COUNT(*) as cnt FROM sales")
     if row and row["min_date"]:
         return str(row["min_date"]), str(row["max_date"]), int(row["cnt"])
-    return "2016-01-01", "2026-09-03", 0
+    return None, None, 0
 
 def process_query_intent(user_query: str, store_id: Optional[str] = "all", target_date: Optional[str] = None) -> Dict[str, Any]:
     """

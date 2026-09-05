@@ -5,6 +5,7 @@ Ensures charts, evidence, KPIs, and textual answers are generated from the EXACT
 """
 
 from typing import Dict, Any, List
+import html
 import numpy as np
 import pandas as pd
 from src.database import query_all, query_one
@@ -805,7 +806,7 @@ def run_reorder_analysis(spec: Dict[str, Any], data_scope_str: str) -> Dict[str,
 
 def run_attention_analysis(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
     res = run_low_stock_analysis(spec, data_scope_str)
-    res["intent"] = "ATTENTION_ITEMS"
+    res["intent"] = "ATTENTION_TODAY"
     res["context_summary"] = res["context_summary"].replace("products at stockout risk", "operational priority items")
     return res
 
@@ -947,6 +948,741 @@ def run_dataset_metadata_query(spec: Dict[str, Any], data_scope_str: str) -> Dic
         "chart_data": chart_spec
     }
 
+def run_product_list_query(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
+    """
+    Executes dedicated PRODUCT_LIST / CATALOGUE_LIST query:
+    - Fetches product_id, product_name, category, unit_price from products table.
+    - Joins or aggregates current_stock from inventory table if available.
+    - Does NOT include unrequested revenue, sales ranking, top performer, reorder action plans, or charts.
+    """
+    products = query_all("""
+        SELECT p.product_id, p.product_name, p.category, p.unit_price,
+               COALESCE(SUM(i.current_stock), 0) as total_stock,
+               COUNT(i.store_id) as stores_stocked
+        FROM products p
+        LEFT JOIN inventory i ON p.product_id = i.product_id
+        GROUP BY p.product_id, p.product_name, p.category, p.unit_price
+        ORDER BY p.product_id ASC
+    """)
+
+    from src.dataset_manager import ActiveDatasetManager
+    active_ds = ActiveDatasetManager.get_active_dataset()
+    ds_name = active_ds.get("dataset_name", "Active Dataset")
+
+    prod_count = len(products)
+    if prod_count == 0:
+        return {
+            "intent": "PRODUCT_LIST",
+            "data_scope": f"Active Dataset: {ds_name} • Product Catalogue",
+            "data_sufficiency": "sufficient",
+            "context_summary": f"No products found in the active dataset '{ds_name}'.",
+            "metrics": [{"label": "Total Products", "value": "0 SKUs"}],
+            "recommendations": [],
+            "evidence": [],
+            "raw_data": [],
+            "chart_data": None
+        }
+
+    # Check if inventory stock data exists
+    has_stock = any(p["total_stock"] > 0 or p["stores_stocked"] > 0 for p in products)
+    
+    # Formulate clean bulleted/numbered product list
+    lines = []
+    for idx, p in enumerate(products, 1):
+        cat_str = f" ({p['category']})" if p.get("category") else ""
+        if has_stock:
+            lines.append(f"{idx}. {p['product_name']}{cat_str} — {p['total_stock']} in stock")
+        else:
+            lines.append(f"{idx}. {p['product_name']}{cat_str}")
+
+    prod_list_str = "\n".join(lines)
+    context_summary = f"You currently have {prod_count} products in your active dataset '{ds_name}':\n\n{prod_list_str}"
+
+    categories = list(set(p["category"] for p in products if p.get("category")))
+    total_stock_all = sum(p["total_stock"] for p in products)
+
+    metrics = [
+        {"label": "Total Products", "value": f"{prod_count} SKUs"}
+    ]
+    if categories:
+        metrics.append({"label": "Categories", "value": ", ".join(categories)})
+    if has_stock:
+        metrics.append({"label": "Total Stock Units", "value": f"{total_stock_all:,} units"})
+
+    evidence = [
+        {
+            "product_id": p["product_id"],
+            "product_name": p["product_name"],
+            "category": p.get("category", "General"),
+            "current_stock": p["total_stock"] if has_stock else "N/A",
+            "unit_price": f"₹{p['unit_price']:,.2f}" if p.get("unit_price") is not None else "N/A",
+            "source": "products catalogue & inventory"
+        }
+        for p in products
+    ]
+
+    return {
+        "intent": "PRODUCT_LIST",
+        "data_scope": f"Active Dataset: {ds_name} • Product Catalogue",
+        "data_sufficiency": "sufficient",
+        "context_summary": context_summary,
+        "metrics": metrics,
+        "recommendations": [],
+        "evidence": evidence,
+        "raw_data": products,
+        "chart_data": None
+    }
+
+def run_product_count_query(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
+    products = query_all("SELECT product_id, product_name, category FROM products ORDER BY product_id")
+    from src.dataset_manager import ActiveDatasetManager
+    ds_name = ActiveDatasetManager.get_active_dataset().get("dataset_name", "Active Dataset")
+    
+    prod_cnt = len(products)
+    prod_names = [p["product_name"] for p in products]
+    categories = list(set(p["category"] for p in products if p.get("category")))
+
+    prod_str = ", ".join(prod_names)
+    context_summary = f"You have {prod_cnt} products (SKUs) in your active dataset '{ds_name}': {prod_str}."
+
+    metrics = [
+        {"label": "Total Products", "value": f"{prod_cnt} SKUs"}
+    ]
+    if categories:
+        metrics.append({"label": "Categories", "value": ", ".join(categories)})
+
+    evidence = [{"product_name": p["product_name"], "category": p.get("category", "General"), "source": "product catalog"} for p in products]
+
+    return {
+        "intent": "PRODUCT_COUNT",
+        "data_scope": f"Active Dataset: {ds_name} • Product Catalog",
+        "data_sufficiency": "sufficient",
+        "context_summary": context_summary,
+        "metrics": metrics,
+        "recommendations": [],
+        "evidence": evidence,
+        "raw_data": products,
+        "chart_data": None
+    }
+
+def run_store_list_query(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
+    stores = query_all("SELECT store_id, store_name, location FROM stores ORDER BY store_id")
+    from src.dataset_manager import ActiveDatasetManager
+    ds_name = ActiveDatasetManager.get_active_dataset().get("dataset_name", "Active Dataset")
+    
+    store_cnt = len(stores)
+    lines = [f"{idx}. {s['store_name']}" + (f" ({s['location']})" if s.get("location") else "") for idx, s in enumerate(stores, 1)]
+    store_str = "\n".join(lines)
+
+    context_summary = f"You have {store_cnt} stores in your active dataset '{ds_name}':\n\n{store_str}"
+
+    metrics = [
+        {"label": "Total Stores", "value": f"{store_cnt} stores"},
+        {"label": "Locations", "value": ", ".join([s["store_name"] for s in stores])}
+    ]
+
+    evidence = [{"store_id": s["store_id"], "store_name": s["store_name"], "location": s.get("location", "N/A"), "source": "stores catalog"} for s in stores]
+
+    return {
+        "intent": "STORE_LIST",
+        "data_scope": f"Active Dataset: {ds_name} • Store Catalog",
+        "data_sufficiency": "sufficient",
+        "context_summary": context_summary,
+        "metrics": metrics,
+        "recommendations": [],
+        "evidence": evidence,
+        "raw_data": stores,
+        "chart_data": None
+    }
+
+def run_store_count_query(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
+    stores = query_all("SELECT store_id, store_name, location FROM stores ORDER BY store_id")
+    from src.dataset_manager import ActiveDatasetManager
+    ds_name = ActiveDatasetManager.get_active_dataset().get("dataset_name", "Active Dataset")
+    
+    store_cnt = len(stores)
+    store_names = [s["store_name"] for s in stores]
+
+    context_summary = f"You have {store_cnt} stores in your active dataset '{ds_name}': {', '.join(store_names)}."
+
+    metrics = [
+        {"label": "Total Stores", "value": f"{store_cnt} stores"},
+        {"label": "Store Locations", "value": ", ".join(store_names)}
+    ]
+
+    evidence = [{"store_id": s["store_id"], "store_name": s["store_name"], "source": "stores catalog"} for s in stores]
+
+    return {
+        "intent": "STORE_COUNT",
+        "data_scope": f"Active Dataset: {ds_name} • Store Scope",
+        "data_sufficiency": "sufficient",
+        "context_summary": context_summary,
+        "metrics": metrics,
+        "recommendations": [],
+        "evidence": evidence,
+        "raw_data": stores,
+        "chart_data": None
+    }
+
+def run_inventory_summary_query(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
+    store_filter = spec.get("store")
+    store_id = store_filter["store_id"] if store_filter else None
+    store_name = store_filter["store_name"] if store_filter else "All Stores"
+
+    where_sql = "WHERE store_id = ?" if store_id else ""
+    params = (store_id,) if store_id else ()
+
+    inv_meta = query_one(f"SELECT COUNT(*) as records, COALESCE(SUM(current_stock), 0) as total_stock, COUNT(DISTINCT product_id) as skus, COUNT(DISTINCT store_id) as stores FROM inventory {where_sql}", params)
+    
+    total_stock = int(inv_meta["total_stock"]) if inv_meta else 0
+    records = int(inv_meta["records"]) if inv_meta else 0
+    skus = int(inv_meta["skus"]) if inv_meta else 0
+    stores = int(inv_meta["stores"]) if inv_meta else 0
+
+    from src.dataset_manager import ActiveDatasetManager
+    active_ds = ActiveDatasetManager.get_active_dataset()
+    ds_name = active_ds.get("dataset_name", "Active Dataset")
+
+    context_summary = f"You currently have a total of {total_stock:,} stock units on hand across {skus} products and {stores} stores in your active inventory dataset '{ds_name}'."
+
+    metrics = [
+        {"label": "Total Stock on Hand", "value": f"{total_stock:,} units"},
+        {"label": "Products Stocked", "value": f"{skus} SKUs"},
+        {"label": "Stores Stocked", "value": f"{stores} stores"},
+        {"label": "Inventory Records", "value": f"{records} records"}
+    ]
+
+    inv_rows = query_all(f"""
+        SELECT p.product_name, st.store_name, i.current_stock
+        FROM inventory i
+        JOIN products p ON i.product_id = p.product_id
+        JOIN stores st ON i.store_id = st.store_id
+        {where_sql}
+        ORDER BY i.current_stock DESC
+    """, params)
+
+    evidence = [
+        {"product_name": r["product_name"], "store_name": r["store_name"], "current_stock": r["current_stock"], "source": "inventory ledger"}
+        for r in inv_rows[:10]
+    ]
+
+    return {
+        "intent": "INVENTORY_SUMMARY",
+        "data_scope": f"Active Dataset: {ds_name} • Scope: {store_name}",
+        "data_sufficiency": "sufficient",
+        "context_summary": context_summary,
+        "metrics": metrics,
+        "recommendations": [],
+        "evidence": evidence,
+        "raw_data": inv_rows,
+        "chart_data": None
+    }
+
+def run_top_product_by_units_query(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
+    store_filter = spec.get("store")
+    store_id = store_filter["store_id"] if store_filter else None
+    store_name = store_filter["store_name"] if store_filter else "All Stores"
+    date_range = spec.get("date_range", {})
+    start_date = date_range.get("start_date", "2016-01-01")
+    end_date = date_range.get("end_date", "2026-09-03")
+    time_label = date_range.get("time_label", "Full Dataset")
+
+    where_clauses = ["s.date BETWEEN ? AND ?"]
+    params = [start_date, end_date]
+    if store_id:
+        where_clauses.append("s.store_id = ?")
+        params.append(store_id)
+
+    where_sql = " AND ".join(where_clauses)
+    sql = f"""
+        SELECT p.product_id, p.product_name, p.category,
+               COALESCE(SUM(s.quantity), 0) as total_units_sold,
+               COALESCE(SUM(s.total_revenue), 0) as total_revenue
+        FROM sales s
+        JOIN products p ON s.product_id = p.product_id
+        WHERE {where_sql}
+        GROUP BY p.product_id, p.product_name, p.category
+        ORDER BY total_units_sold DESC
+        LIMIT 1
+    """
+    top_p = query_one(sql, tuple(params))
+    if not top_p:
+        return {
+            "intent": "TOP_PRODUCT_BY_UNITS",
+            "data_scope": data_scope_str,
+            "data_sufficiency": "sufficient",
+            "context_summary": f"No sales records found for {time_label} across {store_name}.",
+            "metrics": [],
+            "recommendations": [],
+            "evidence": [],
+            "raw_data": {},
+            "chart_data": None
+        }
+
+    p_name = top_p["product_name"]
+    units = int(top_p["total_units_sold"])
+    rev = float(top_p["total_revenue"])
+
+    context_summary = f"The product that sold the most units for {time_label} across {store_name} is '{p_name}' with {units:,} units sold (generating ₹{rev:,.2f} in revenue)."
+
+    metrics = [
+        {"label": "Most Sold Product", "value": p_name},
+        {"label": "Total Units Sold", "value": f"{units:,} units"},
+        {"label": "Revenue Generated", "value": f"₹{rev:,.2f}"},
+        {"label": "Scope", "value": store_name}
+    ]
+
+    evidence = [{
+        "product_name": p_name,
+        "store_name": store_name,
+        "units_sold": units,
+        "revenue": rev,
+        "source": "sales ledger"
+    }]
+
+    return {
+        "intent": "TOP_PRODUCT_BY_UNITS",
+        "data_scope": data_scope_str,
+        "data_sufficiency": "sufficient",
+        "context_summary": context_summary,
+        "metrics": metrics,
+        "recommendations": [],
+        "evidence": evidence,
+        "raw_data": top_p,
+        "chart_data": None
+    }
+
+def run_top_product_by_revenue_query(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
+    store_filter = spec.get("store")
+    store_id = store_filter["store_id"] if store_filter else None
+    store_name = store_filter["store_name"] if store_filter else "All Stores"
+    date_range = spec.get("date_range", {})
+    start_date = date_range.get("start_date", "2016-01-01")
+    end_date = date_range.get("end_date", "2026-09-03")
+    time_label = date_range.get("time_label", "Full Dataset")
+
+    where_clauses = ["s.date BETWEEN ? AND ?"]
+    params = [start_date, end_date]
+    if store_id:
+        where_clauses.append("s.store_id = ?")
+        params.append(store_id)
+
+    where_sql = " AND ".join(where_clauses)
+    sql = f"""
+        SELECT p.product_id, p.product_name, p.category,
+               COALESCE(SUM(s.total_revenue), 0) as total_revenue,
+               COALESCE(SUM(s.quantity), 0) as total_units_sold
+        FROM sales s
+        JOIN products p ON s.product_id = p.product_id
+        WHERE {where_sql}
+        GROUP BY p.product_id, p.product_name, p.category
+        ORDER BY total_revenue DESC
+        LIMIT 1
+    """
+    top_p = query_one(sql, tuple(params))
+    if not top_p:
+        return {
+            "intent": "TOP_PRODUCT_BY_REVENUE",
+            "data_scope": data_scope_str,
+            "data_sufficiency": "sufficient",
+            "context_summary": f"No sales records found for {time_label} across {store_name}.",
+            "metrics": [],
+            "recommendations": [],
+            "evidence": [],
+            "raw_data": {},
+            "chart_data": None
+        }
+
+    p_name = top_p["product_name"]
+    rev = float(top_p["total_revenue"])
+    units = int(top_p["total_units_sold"])
+
+    context_summary = f"The product that generated the most revenue for {time_label} across {store_name} is '{p_name}' with ₹{rev:,.2f} in total revenue ({units:,} units sold)."
+
+    metrics = [
+        {"label": "Highest Revenue Product", "value": p_name},
+        {"label": "Total Revenue", "value": f"₹{rev:,.2f}"},
+        {"label": "Units Sold", "value": f"{units:,} units"},
+        {"label": "Scope", "value": store_name}
+    ]
+
+    evidence = [{
+        "product_name": p_name,
+        "store_name": store_name,
+        "revenue": rev,
+        "units_sold": units,
+        "source": "sales ledger"
+    }]
+
+    return {
+        "intent": "TOP_PRODUCT_BY_REVENUE",
+        "data_scope": data_scope_str,
+        "data_sufficiency": "sufficient",
+        "context_summary": context_summary,
+        "metrics": metrics,
+        "recommendations": [],
+        "evidence": evidence,
+        "raw_data": top_p,
+        "chart_data": None
+    }
+
+def run_store_performance_query(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
+    intent = spec.get("intent", "STORE_PERFORMANCE")
+    store_filter = spec.get("store")
+    store_id = store_filter["store_id"] if store_filter else None
+    store_name = store_filter["store_name"] if store_filter else "All Stores"
+    date_range = spec.get("date_range", {})
+    start_date = date_range.get("start_date", "2016-01-01")
+    end_date = date_range.get("end_date", "2026-09-03")
+    time_label = date_range.get("time_label", "Full Dataset")
+    cat_filter = spec.get("category")
+    metric = spec.get("metric", "revenue")
+    q_lower = spec.get("user_query", "").lower()
+
+    # If filtered to a single specific store (e.g. "How is City Store performing?")
+    if store_id and store_id.lower() != "all":
+        sql = """
+            SELECT st.store_id, st.store_name, st.location,
+                   COALESCE(SUM(s.total_revenue), 0) as total_revenue,
+                   COALESCE(SUM(s.quantity), 0) as total_units_sold,
+                   COUNT(s.sale_id) as total_transactions
+            FROM stores st
+            LEFT JOIN sales s ON st.store_id = s.store_id AND s.date BETWEEN ? AND ?
+            WHERE st.store_id = ?
+            GROUP BY st.store_id, st.store_name, st.location
+        """
+        store_res = query_one(sql, (start_date, end_date, store_id))
+        if not store_res:
+            return {
+                "intent": intent,
+                "data_scope": data_scope_str,
+                "data_sufficiency": "sufficient",
+                "context_summary": f"No sales records found for {store_name} ({time_label}).",
+                "metrics": [],
+                "recommendations": [],
+                "evidence": [],
+                "raw_data": {},
+                "chart_data": None
+            }
+
+        s_rev = float(store_res["total_revenue"])
+        s_units = int(store_res["total_units_sold"])
+        s_tx = int(store_res["total_transactions"])
+
+        top_p_sql = """
+            SELECT p.product_name, SUM(s.total_revenue) as rev, SUM(s.quantity) as units
+            FROM sales s
+            JOIN products p ON s.product_id = p.product_id
+            WHERE s.store_id = ? AND s.date BETWEEN ? AND ?
+            GROUP BY p.product_name
+            ORDER BY rev DESC LIMIT 1
+        """
+        top_p = query_one(top_p_sql, (store_id, start_date, end_date))
+        top_p_txt = f" Top product: '{top_p['product_name']}' (₹{top_p['rev']:,.2f}, {top_p['units']} units)." if top_p else ""
+
+        context_summary = f"{store_res['store_name']} generated ₹{s_rev:,.2f} in total revenue across {s_units:,} units sold ({s_tx} sales transactions) for {time_label}.{top_p_txt}"
+
+        metrics = [
+            {"label": "Store", "value": store_res["store_name"]},
+            {"label": "Total Revenue", "value": f"₹{s_rev:,.2f}"},
+            {"label": "Units Sold", "value": f"{s_units:,} units"},
+            {"label": "Sales Transactions", "value": f"{s_tx} records"}
+        ]
+        if top_p:
+            metrics.append({"label": "Top SKU", "value": f"{top_p['product_name']} (₹{top_p['rev']:,.2f})"})
+
+        evidence = [{
+            "store_name": store_res["store_name"],
+            "revenue": s_rev,
+            "units_sold": s_units,
+            "source": f"sales ledger ({time_label})"
+        }]
+
+        return {
+            "intent": intent,
+            "data_scope": data_scope_str,
+            "data_sufficiency": "sufficient",
+            "context_summary": context_summary,
+            "metrics": metrics,
+            "recommendations": [],
+            "evidence": evidence,
+            "raw_data": store_res,
+            "chart_data": None
+        }
+
+    # Multi-store ranking calculation
+    sql_all = """
+        SELECT st.store_id, st.store_name, st.location,
+               COALESCE(SUM(s.total_revenue), 0) as total_revenue,
+               COALESCE(SUM(s.quantity), 0) as total_units_sold,
+               COUNT(s.sale_id) as total_transactions
+        FROM stores st
+        LEFT JOIN sales s ON st.store_id = s.store_id AND s.date BETWEEN ? AND ?
+        GROUP BY st.store_id, st.store_name, st.location
+        ORDER BY total_revenue DESC
+    """
+    store_results = query_all(sql_all, (start_date, end_date))
+
+    if not store_results:
+        return {
+            "intent": intent,
+            "data_scope": data_scope_str,
+            "data_sufficiency": "sufficient",
+            "context_summary": f"No stores or sales data found in the active dataset.",
+            "metrics": [],
+            "recommendations": [],
+            "evidence": [],
+            "raw_data": [],
+            "chart_data": None
+        }
+
+    is_units_query = (intent == "STORE_PERFORMANCE_BY_UNITS" or metric == "units" or "sold the most units" in q_lower or "sold most units" in q_lower or "most units" in q_lower)
+    is_worst_query = any(k in q_lower for k in ["worst", "lowest", "underperforming", "doing poorly", "weakest"])
+
+    if is_units_query:
+        store_results.sort(key=lambda x: (x["total_units_sold"], x["total_revenue"]), reverse=not is_worst_query)
+    else:
+        store_results.sort(key=lambda x: (x["total_revenue"], x["total_units_sold"]), reverse=not is_worst_query)
+
+    best_st = store_results[0]
+    worst_st = store_results[-1]
+    winner_name = best_st["store_name"]
+    winner_rev = float(best_st["total_revenue"])
+    winner_units = int(best_st["total_units_sold"])
+
+    if len(store_results) >= 2:
+        second_st = store_results[1]
+        sec_name = second_st["store_name"]
+        sec_rev = float(second_st["total_revenue"])
+        sec_units = int(second_st["total_units_sold"])
+        rev_diff = winner_rev - sec_rev
+        units_diff = winner_units - sec_units
+
+        if is_worst_query:
+            context_summary = (
+                f"{best_st['store_name']} is currently the lowest-performing store, "
+                f"with ₹{best_st['total_revenue']:,.2f} in revenue and {best_st['total_units_sold']:,} units sold. "
+                f"In comparison, {worst_st['store_name']} generated ₹{worst_st['total_revenue']:,.2f} in revenue and sold {worst_st['total_units_sold']:,} units "
+                f"(a revenue gap of ₹{abs(worst_st['total_revenue'] - best_st['total_revenue']):,.2f})."
+            )
+        elif is_units_query:
+            context_summary = (
+                f"{winner_name} sold the most units with {winner_units:,} units sold "
+                f"(generating ₹{winner_rev:,.2f} in revenue). {sec_name} generated ₹{sec_rev:,.2f} "
+                f"and sold {sec_units:,} units.\n\n"
+                f"{winner_name} sold {units_diff:,} more units than {sec_name}."
+            )
+        elif intent == "STORE_PERFORMANCE_BY_REVENUE":
+            context_summary = (
+                f"{winner_name} generated the most revenue with ₹{winner_rev:,.2f} "
+                f"and {winner_units:,} units sold. {sec_name} generated ₹{sec_rev:,.2f} "
+                f"and sold {sec_units:,} units.\n\n"
+                f"{winner_name} generated ₹{rev_diff:,.2f} more revenue than {sec_name}."
+            )
+        else:
+            context_summary = (
+                f"{winner_name} is currently the best-performing store, "
+                f"with ₹{winner_rev:,.2f} in revenue and {winner_units:,} units sold. "
+                f"{sec_name} generated ₹{sec_rev:,.2f} in revenue and sold {sec_units:,} units.\n\n"
+                f"{winner_name} generated ₹{rev_diff:,.2f} more revenue than {sec_name}."
+            )
+    else:
+        context_summary = f"{winner_name} generated ₹{winner_rev:,.2f} in revenue with {winner_units:,} units sold across {best_st['total_transactions']} sales records for {time_label}."
+
+    metrics = []
+    for r in store_results:
+        metrics.append({
+            "label": r["store_name"],
+            "value": f"₹{r['total_revenue']:,.2f} ({r['total_units_sold']:,} units)"
+        })
+    if len(store_results) >= 2:
+        metrics.append({"label": "Top Store", "value": winner_name})
+        metrics.append({"label": "Revenue Difference", "value": f"₹{abs(winner_rev - store_results[1]['total_revenue']):,.2f}"})
+
+    evidence = [
+        {
+            "store_name": r["store_name"],
+            "revenue": r["total_revenue"],
+            "units_sold": r["total_units_sold"],
+            "source": f"sales ledger ({time_label})"
+        }
+        for r in store_results
+    ]
+
+    chart_spec = {
+        "type": "bar",
+        "title": f"Store Performance by Revenue ({time_label})",
+        "labels": [r["store_name"] for r in store_results],
+        "datasets": [{
+            "label": "Revenue (₹)",
+            "data": [r["total_revenue"] for r in store_results],
+            "color": "#087F80"
+        }]
+    }
+
+    return {
+        "intent": intent,
+        "data_scope": data_scope_str,
+        "data_sufficiency": "sufficient",
+        "context_summary": context_summary,
+        "metrics": metrics,
+        "recommendations": [],
+        "evidence": evidence,
+        "raw_data": store_results,
+        "chart_data": chart_spec
+    }
+
+def run_store_comparison_query(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
+    date_range = spec.get("date_range", {})
+    start_date = date_range.get("start_date", "2016-01-01")
+    end_date = date_range.get("end_date", "2026-09-03")
+    time_label = date_range.get("time_label", "Full Dataset")
+
+    sql_all = """
+        SELECT st.store_id, st.store_name, st.location,
+               COALESCE(SUM(s.total_revenue), 0) as total_revenue,
+               COALESCE(SUM(s.quantity), 0) as total_units_sold,
+               COUNT(s.sale_id) as total_transactions
+        FROM stores st
+        LEFT JOIN sales s ON st.store_id = s.store_id AND s.date BETWEEN ? AND ?
+        GROUP BY st.store_id, st.store_name, st.location
+        ORDER BY total_revenue DESC
+    """
+    store_results = query_all(sql_all, (start_date, end_date))
+
+    if not store_results:
+        return {
+            "intent": "STORE_COMPARISON",
+            "data_scope": data_scope_str,
+            "data_sufficiency": "sufficient",
+            "context_summary": "No store sales records found to compare in the active dataset.",
+            "metrics": [],
+            "recommendations": [],
+            "evidence": [],
+            "raw_data": [],
+            "chart_data": None
+        }
+
+    if len(store_results) >= 2:
+        st1, st2 = store_results[0], store_results[1]
+        rev1, rev2 = float(st1["total_revenue"]), float(st2["total_revenue"])
+        u1, u2 = int(st1["total_units_sold"]), int(st2["total_units_sold"])
+        rev_diff = rev1 - rev2
+        u_diff = u1 - u2
+
+        context_summary = (
+            f"{st1['store_name']} generated ₹{rev1:,.2f} in revenue and {u1:,} units sold, "
+            f"while {st2['store_name']} generated ₹{rev2:,.2f} in revenue and {u2:,} units sold.\n\n"
+            f"{st1['store_name']} generated ₹{rev_diff:,.2f} more revenue ({u_diff:,} more units) than {st2['store_name']}."
+        )
+    else:
+        st1 = store_results[0]
+        context_summary = f"{st1['store_name']} generated ₹{st1['total_revenue']:,.2f} and {st1['total_units_sold']:,} units sold ({time_label}). Only 1 store is available in the active dataset."
+
+    metrics = [
+        {"label": r["store_name"], "value": f"₹{r['total_revenue']:,.2f} ({r['total_units_sold']:,} units)"}
+        for r in store_results
+    ]
+    if len(store_results) >= 2:
+        metrics.append({"label": "Revenue Difference", "value": f"₹{abs(store_results[0]['total_revenue'] - store_results[1]['total_revenue']):,.2f}"})
+
+    evidence = [
+        {
+            "store_name": r["store_name"],
+            "revenue": r["total_revenue"],
+            "units_sold": r["total_units_sold"],
+            "source": f"sales ledger ({time_label})"
+        }
+        for r in store_results
+    ]
+
+    chart_spec = {
+        "type": "bar",
+        "title": f"Store Comparison by Revenue ({time_label})",
+        "labels": [r["store_name"] for r in store_results],
+        "datasets": [{
+            "label": "Revenue (₹)",
+            "data": [r["total_revenue"] for r in store_results],
+            "color": "#087F80"
+        }]
+    }
+
+    return {
+        "intent": "STORE_COMPARISON",
+        "data_scope": data_scope_str,
+        "data_sufficiency": "sufficient",
+        "context_summary": context_summary,
+        "metrics": metrics,
+        "recommendations": [],
+        "evidence": evidence,
+        "raw_data": store_results,
+        "chart_data": chart_spec
+    }
+
+def run_greeting_query(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
+    from src.dataset_manager import ActiveDatasetManager
+    active_ds = ActiveDatasetManager.get_active_dataset()
+    ds_name = active_ds.get("dataset_name", "No Dataset Active")
+    raw_q = spec.get("raw_question", "").lower().strip()
+    
+    if any(k in raw_q for k in ["thank", "thx", "appreciate"]):
+        msg = "You're welcome! I'm here whenever you need help with your retail data, inventory, or sales analytics."
+    elif any(k in raw_q for k in ["ok", "okay", "got it", "great", "nice", "cool", "perfect", "awesome", "sure", "alright"]):
+        msg = "Got it! Let me know if you need any further analysis, reorder recommendations, or performance comparisons."
+    elif any(k in raw_q for k in ["bye", "goodbye", "see you", "see ya"]):
+        msg = "Goodbye! Have a great day managing your retail operations."
+    else:
+        msg = f"Hello! I am your RetailIQ Copilot. Active dataset is '{ds_name}'. You can ask me about your product catalogue, stock levels, sales trends, reorder recommendations, or store performance."
+
+    return {
+        "intent": "GREETING",
+        "data_scope": f"Active Dataset: {ds_name}",
+        "data_sufficiency": "sufficient",
+        "context_summary": msg,
+        "metrics": [],
+        "recommendations": [],
+        "evidence": [],
+        "raw_data": [],
+        "chart_data": None
+    }
+
+def run_clarification_query(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
+    raw_q = html.escape(spec.get("raw_question", "").strip())
+    return {
+        "intent": "CLARIFICATION_NEEDED",
+        "data_scope": "Query Clarification",
+        "data_sufficiency": "insufficient",
+        "context_summary": f"Could you please clarify your question '{raw_q}'? You can ask about products, stock levels, sales trends, reorder recommendations, or store performance.",
+        "metrics": [],
+        "recommendations": [
+            "Ask about products: 'What products do I have?' or 'Which product sold the most?'",
+            "Ask about inventory: 'What is low in stock?' or 'Which products should I reorder?'",
+            "Ask about stores: 'Which stores are performing best?' or 'Compare stores'"
+        ],
+        "evidence": [],
+        "raw_data": [],
+        "chart_data": None
+    }
+
+def run_help_query(spec: Dict[str, Any], data_scope_str: str) -> Dict[str, Any]:
+    return {
+        "intent": "HELP",
+        "data_scope": "RetailIQ Help Desk",
+        "data_sufficiency": "sufficient",
+        "context_summary": (
+            "Here are things you can ask me:\n"
+            "• Catalogue & Stock: 'What items do I have?', 'How much stock do I have?', 'Show products with stock'\n"
+            "• Sales Analysis: 'Which product sold the most?', 'Which product generated the most revenue?', 'How did sales perform?'\n"
+            "• Inventory Operations: 'Which products should I reorder?', 'Which products are overstocked?', 'What needs my attention today?'\n"
+            "• Store Comparison: 'How many stores do I have?', 'Compare store performance'"
+        ),
+        "metrics": [],
+        "recommendations": [],
+        "evidence": [],
+        "raw_data": [],
+        "chart_data": None
+    }
+
 def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
     """
     Primary dispatcher: Executes SQL calculations for any QuerySpecification.
@@ -1012,7 +1748,33 @@ def execute_query_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
             "chart_data": None
         }
 
-    # 0. METADATA & CAUSAL ANALYSIS INTENT DISPATCHER
+    # 0. DEDICATED INTENT DISPATCHERS
+    if intent == "GREETING":
+        return run_greeting_query(spec, data_scope_str)
+    if intent == "HELP":
+        return run_help_query(spec, data_scope_str)
+    if intent == "CLARIFICATION_NEEDED":
+        return run_clarification_query(spec, data_scope_str)
+    if intent == "PRODUCT_LIST":
+        return run_product_list_query(spec, data_scope_str)
+    if intent == "PRODUCT_COUNT":
+        return run_product_count_query(spec, data_scope_str)
+    if intent == "STORE_LIST":
+        return run_store_list_query(spec, data_scope_str)
+    if intent == "STORE_COUNT":
+        return run_store_count_query(spec, data_scope_str)
+    if intent in ["STORE_PERFORMANCE", "STORE_PERFORMANCE_BY_REVENUE", "STORE_PERFORMANCE_BY_UNITS"]:
+        return run_store_performance_query(spec, data_scope_str)
+    if intent == "STORE_COMPARISON":
+        return run_store_comparison_query(spec, data_scope_str)
+    if intent == "INVENTORY_SUMMARY":
+        return run_inventory_summary_query(spec, data_scope_str)
+    if intent == "TOP_PRODUCT_BY_UNITS":
+        return run_top_product_by_units_query(spec, data_scope_str)
+    if intent == "TOP_PRODUCT_BY_REVENUE":
+        return run_top_product_by_revenue_query(spec, data_scope_str)
+    if intent in ["ATTENTION_TODAY", "ATTENTION_ITEMS"]:
+        return run_attention_analysis(spec, data_scope_str)
     if intent == "DATASET_METADATA":
         return run_dataset_metadata_query(spec, data_scope_str)
     if intent == "SALES_IMPROVEMENT":

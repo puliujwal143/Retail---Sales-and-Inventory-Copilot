@@ -349,10 +349,10 @@ def api_forecast(product_id: str, store_id: Optional[str] = "all", date: Optiona
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/compare-stores")
-def api_compare_stores(store_ids: str = "STR001,STR002,STR003", days: int = 30, date: Optional[str] = None):
+def api_compare_stores(store_ids: Optional[str] = None, days: int = 30, date: Optional[str] = None):
     """Returns side-by-side store comparison matrix, stock health, and trend charts."""
     try:
-        s_list = [s.strip() for s in store_ids.split(",") if s.strip()]
+        s_list = [s.strip() for s in store_ids.split(",") if s.strip()] if store_ids and store_ids.strip().lower() != "all" else None
         return compare_stores_analytics(store_ids=s_list, time_days=days, target_date=date)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

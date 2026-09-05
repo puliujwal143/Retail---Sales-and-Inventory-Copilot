@@ -21,6 +21,12 @@ class TestAIGroundingPipeline(unittest.TestCase):
     def setUpClass(cls):
         # Ensure database is initialized
         init_db(force=False)
+        if ActiveDatasetManager.get_active_dataset_id() is None:
+            sales_datasets = [d for d in ActiveDatasetManager.list_datasets() if d.get("dataset_name") == "Sales"]
+            if sales_datasets:
+                ActiveDatasetManager.activate_dataset(sales_datasets[0]["dataset_id"])
+            else:
+                ActiveDatasetManager.activate_dataset("demo")
         cls.active_ds = ActiveDatasetManager.get_active_dataset()
         safe_print(f"\n[SETUP] Active Dataset: {cls.active_ds.get('dataset_name')} (ID: {cls.active_ds.get('dataset_id')})")
         products = query_all("SELECT product_id, product_name FROM products")

@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 from src.database import query_df, query_one, query_all
+from src.dataset_manager import ActiveDatasetManager
 
 # Centralized configuration & business rules thresholds
 INVENTORY_DEMAND_WINDOW_DAYS = 90  # Demand calculation window in calendar days
@@ -12,7 +13,7 @@ OVERSTOCK_DAYS_THRESHOLD = 30.0    # Days remaining > 30 is Overstocked
 SLOW_MOVING_MAX_SALES = 5          # Sales in 90 days < 5 is Slow Moving
 SLOW_MOVING_MIN_STOCK = 20         # Minimum stock to qualify as Slow Moving
 
-def get_recent_demand_period(target_date: str = None) -> Tuple[str, str, int]:
+def get_recent_demand_period(target_date: Optional[str] = None) -> Tuple[Optional[str], Optional[str], int]:
     """
     Returns (recent_start_date, recent_end_date, window_days).
     Dynamically computes available historical days in active dataset:
@@ -21,14 +22,20 @@ def get_recent_demand_period(target_date: str = None) -> Tuple[str, str, int]:
     - Resolves "today" / "latest" / None to the MAX date in the active dataset.
     Never fabricates missing days.
     """
+    if ActiveDatasetManager.get_active_dataset_id() is None:
+        return None, None, 0
+
     bounds = query_one("SELECT MIN(date) as min_d, MAX(date) as max_d FROM sales")
-    min_date_str = str(bounds["min_d"]) if bounds and bounds.get("min_d") else "2026-01-01"
-    max_date_str = str(bounds["max_d"]) if bounds and bounds.get("max_d") else "2026-01-01"
+    min_date_str = str(bounds["min_d"]) if bounds and bounds.get("min_d") else None
+    max_date_str = str(bounds["max_d"]) if bounds and bounds.get("max_d") else None
+
+    if not min_date_str or not max_date_str:
+        return None, None, 0
 
     if not target_date or target_date in ["today", "latest", "None", "null"]:
         end_date_str = max_date_str
     else:
-        end_date_str = target_date
+        end_date_str = str(target_date).strip()
         if end_date_str > max_date_str:
             end_date_str = max_date_str
         if end_date_str < min_date_str:
@@ -44,9 +51,7 @@ def get_recent_demand_period(target_date: str = None) -> Tuple[str, str, int]:
     start_date_str = dt_start.strftime("%Y-%m-%d")
     return start_date_str, end_date_str, window_days
 
-from src.dataset_manager import ActiveDatasetManager
-
-def get_inventory_status_df(store_id: str = None, category: str = None, target_date: str = None) -> pd.DataFrame:
+def get_inventory_status_df(store_id: Optional[str] = None, category: Optional[str] = None, target_date: Optional[str] = None) -> pd.DataFrame:
     """
     Computes deterministic inventory status metrics across stores and products.
     Uses the centralized demand window for daily sales & coverage.
@@ -218,8 +223,6 @@ def get_inventory_status_df(store_id: str = None, category: str = None, target_d
 
     return df
 
-    return df
-
 def get_low_stock_items() -> List[Dict[str, Any]]:
     """Returns all items in CRITICAL or WARNING status sorted by days remaining."""
     df = get_inventory_status_df()
@@ -244,7 +247,7 @@ def get_overstocked_items() -> List[Dict[str, Any]]:
     filtered = df[df['status'] == 'OVERSTOCK'].sort_values(by='days_remaining', ascending=False)
     return filtered.to_dict(orient='records')
 
-def get_interstore_transfer_opportunities(inv_df: pd.DataFrame = None) -> List[Dict[str, Any]]:
+def get_interstore_transfer_opportunities(inv_df: Optional[pd.DataFrame] = None) -> List[Dict[str, Any]]:
     """
     Identifies products overstocked at one store and critical/warning/out of stock at another store.
     Returns structured inter-store transfer recommendations.

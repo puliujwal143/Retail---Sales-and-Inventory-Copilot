@@ -24,6 +24,10 @@ def get_product_sales_trends(time_days: int = 30, store_id: Optional[str] = None
     Compares sales in recent N-day period vs previous N-day period per product.
     Calculates exact percentage change and flags sales spikes / drops.
     """
+    from src.dataset_manager import ActiveDatasetManager
+    if ActiveDatasetManager.get_active_dataset_id() is None:
+        return pd.DataFrame()
+
     resolved_store = resolve_store_id(store_id)
     where_clause = ""
     params = [time_days, time_days, 2 * time_days]
@@ -110,6 +114,10 @@ def get_sales_drops(time_days: int = 30) -> List[Dict[str, Any]]:
 
 def get_store_performance(store_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """Returns total revenue and total units sold per store."""
+    from src.dataset_manager import ActiveDatasetManager
+    if ActiveDatasetManager.get_active_dataset_id() is None:
+        return []
+
     resolved_store = resolve_store_id(store_id)
     where_clause = ""
     params = ()
@@ -134,6 +142,10 @@ def get_store_performance(store_id: Optional[str] = None) -> List[Dict[str, Any]
 
 def get_category_performance(store_id: Optional[str] = None, target_date: Optional[str] = None) -> List[Dict[str, Any]]:
     """Returns sales performance broken down by product category."""
+    from src.dataset_manager import ActiveDatasetManager
+    if ActiveDatasetManager.get_active_dataset_id() is None:
+        return []
+
     resolved_store = resolve_store_id(store_id)
     where_parts = []
     params = []
@@ -161,13 +173,19 @@ def get_category_performance(store_id: Optional[str] = None, target_date: Option
 
 def get_daily_sales_trend(days: int = 30, store_id: Optional[str] = None, target_date: Optional[str] = None) -> List[Dict[str, Any]]:
     """Returns aggregate daily/monthly revenue, volume, and period metadata relative to target_date."""
+    from src.dataset_manager import ActiveDatasetManager
+    if ActiveDatasetManager.get_active_dataset_id() is None:
+        return []
+
     resolved_store = resolve_store_id(store_id)
     where_parts = []
     params = []
     
     # Normalize target_date if > max_date
     bounds = query_one("SELECT MAX(date) as max_date FROM sales")
-    max_db_date = bounds["max_date"] if bounds else "2026-09-03"
+    max_db_date = bounds["max_date"] if bounds and bounds.get("max_date") else None
+    if not max_db_date:
+        return []
     
     effective_target = target_date
     if effective_target and effective_target > max_db_date:
@@ -287,14 +305,87 @@ def get_daily_sales_trend(days: int = 30, store_id: Optional[str] = None, target
 def get_sales_analytics_charts(days: int = 30, store_id: Optional[str] = "all", category: Optional[str] = "all", target_date: Optional[str] = None) -> Dict[str, Any]:
     """
     Generates structured chart specs and deterministic insights for the Sales Analytics Workspace.
+    Safely handles empty datasets (NO_DATA state) without throwing 500 errors.
     """
+    from src.dataset_manager import ActiveDatasetManager
+    timeframe_str = "6 Months" if days == 180 else f"{days} Days"
+    granularity_str = "Monthly" if days > 90 else "Daily"
+
+    if ActiveDatasetManager.get_active_dataset_id() is None:
+        return {
+            "time_days": days,
+            "combined_trend": {
+                "type": "dual_axis",
+                "title": f"Revenue & Sales Volume ({timeframe_str})",
+                "subtitle": "No retail data available",
+                "labels": [],
+                "periods": [],
+                "is_monthly": False,
+                "is_partial": [],
+                "avg_daily_revenue": [],
+                "avg_daily_units": [],
+                "datasets": [
+                    {"label": "Revenue (₹)", "data": [], "color": "#087F80", "type": "line", "y_axis": "left", "unit": "₹"},
+                    {"label": "Units Sold", "data": [], "color": "#3B82F6", "type": "bar", "y_axis": "right", "unit": "units"}
+                ]
+            },
+            "revenue_trend": {
+                "type": "line",
+                "title": f"Revenue Movement ({timeframe_str})",
+                "subtitle": "No retail data available",
+                "labels": [],
+                "periods": [],
+                "is_monthly": False,
+                "is_partial": [],
+                "avg_daily_revenue": [],
+                "avg_daily_units": [],
+                "datasets": [{"label": "Revenue (₹)", "data": [], "color": "#087F80"}]
+            },
+            "units_trend": {
+                "type": "area",
+                "title": f"Units Sold Over Time ({timeframe_str})",
+                "subtitle": "No retail data available",
+                "labels": [],
+                "periods": [],
+                "is_monthly": False,
+                "is_partial": [],
+                "avg_daily_revenue": [],
+                "avg_daily_units": [],
+                "datasets": [{"label": "Units Sold", "data": [], "color": "#10b981"}]
+            },
+            "category_chart": {
+                "type": "bar",
+                "title": "Revenue by Product Category",
+                "subtitle": "No category data available",
+                "labels": [],
+                "datasets": [{"label": "Category Revenue (₹)", "data": [], "color": "#8b5cf6"}]
+            },
+            "top_products_chart": {
+                "type": "horizontal_bar",
+                "title": "Top 5 Products by Revenue",
+                "subtitle": "No product data available",
+                "labels": [],
+                "datasets": [{"label": "Revenue (₹)", "data": [], "color": "#06b6d4"}]
+            },
+            "store_chart": {
+                "type": "bar",
+                "title": "Store Performance Comparison",
+                "subtitle": "No store data available",
+                "labels": [],
+                "datasets": [{"label": "Store Revenue (₹)", "data": [], "color": "#f59e0b"}]
+            },
+            "spikes": [],
+            "drops": [],
+            "insights": ["No sales data available. Upload a dataset to view sales trends and analytics."]
+        }
+
     resolved_store = resolve_store_id(store_id)
     
     # Normalize target_date
     bounds = query_one("SELECT MAX(date) as max_date FROM sales")
-    max_db_date = bounds["max_date"] if bounds else "2026-09-03"
+    max_db_date = bounds["max_date"] if bounds and bounds.get("max_date") else None
     effective_target = target_date
-    if effective_target and effective_target > max_db_date:
+    if effective_target and max_db_date and effective_target > max_db_date:
         effective_target = max_db_date
 
     # 1. Trend (Revenue & Units)
@@ -307,13 +398,10 @@ def get_sales_analytics_charts(days: int = 30, store_id: Optional[str] = "all", 
     avg_daily_revs = [d.get("avg_daily_revenue", d.get("total_revenue", 0)) for d in daily]
     avg_daily_units_list = [d.get("avg_daily_units", d.get("total_units", 0)) for d in daily]
 
-    timeframe_str = "6 Months" if days == 180 else f"{days} Days"
-    granularity_str = "Monthly" if days > 90 else "Daily"
-
     combined_trend_chart = {
         "type": "dual_axis",
         "title": f"Revenue & Sales Volume ({timeframe_str})",
-        "subtitle": f"{granularity_str} revenue and units sold over time",
+        "subtitle": f"{granularity_str} revenue and units sold over time" if daily else "No sales recorded in this period",
         "labels": labels,
         "periods": daily,
         "is_monthly": (days > 90),
@@ -343,7 +431,7 @@ def get_sales_analytics_charts(days: int = 30, store_id: Optional[str] = "all", 
     revenue_trend_chart = {
         "type": "line",
         "title": f"Revenue Movement ({timeframe_str})",
-        "subtitle": f"{granularity_str} revenue trajectory",
+        "subtitle": f"{granularity_str} revenue trajectory" if daily else "No sales recorded in this period",
         "labels": labels,
         "periods": daily,
         "is_monthly": (days > 90),
@@ -356,7 +444,7 @@ def get_sales_analytics_charts(days: int = 30, store_id: Optional[str] = "all", 
     units_trend_chart = {
         "type": "area",
         "title": f"Units Sold Over Time ({timeframe_str})",
-        "subtitle": f"{granularity_str} unit demand volume",
+        "subtitle": f"{granularity_str} unit demand volume" if daily else "No sales recorded in this period",
         "labels": labels,
         "periods": daily,
         "is_monthly": (days > 90),
@@ -374,7 +462,7 @@ def get_sales_analytics_charts(days: int = 30, store_id: Optional[str] = "all", 
     category_chart = {
         "type": "bar",
         "title": "Revenue by Product Category",
-        "subtitle": "Total revenue per category",
+        "subtitle": "Total revenue per category" if categories else "No categories available",
         "labels": cat_names,
         "datasets": [{"label": "Category Revenue (₹)", "data": cat_revs, "color": "#8b5cf6"}]
     }
@@ -388,27 +476,30 @@ def get_sales_analytics_charts(days: int = 30, store_id: Optional[str] = "all", 
     if effective_target:
         where_parts.append("s.date <= ? AND s.date >= date(?, '-' || ? || ' days')")
         params.extend([effective_target, effective_target, days])
-    else:
+    elif max_db_date:
         where_parts.append("s.date >= date((SELECT MAX(date) FROM sales), '-' || ? || ' days')")
         params.append(days)
 
     where_clause = " WHERE " + " AND ".join(where_parts) if where_parts else ""
 
-    top_p_query = f"""
-    SELECT p.product_name, COALESCE(SUM(s.quantity), 0) as units, ROUND(COALESCE(SUM(s.total_revenue), 0), 2) as revenue
-    FROM sales s JOIN products p ON s.product_id = p.product_id
-    {where_clause}
-    GROUP BY p.product_id, p.product_name
-    ORDER BY revenue DESC LIMIT 5
-    """
-    top_p_data = query_all(top_p_query, tuple(params))
+    top_p_data = []
+    if max_db_date or effective_target:
+        top_p_query = f"""
+        SELECT p.product_name, COALESCE(SUM(s.quantity), 0) as units, ROUND(COALESCE(SUM(s.total_revenue), 0), 2) as revenue
+        FROM sales s JOIN products p ON s.product_id = p.product_id
+        {where_clause}
+        GROUP BY p.product_id, p.product_name
+        ORDER BY revenue DESC LIMIT 5
+        """
+        top_p_data = query_all(top_p_query, tuple(params))
+        
     top_p_names = [p["product_name"] for p in top_p_data]
     top_p_revs = [p["revenue"] for p in top_p_data]
 
     top_products_chart = {
         "type": "horizontal_bar",
         "title": "Top 5 Products by Revenue",
-        "subtitle": f"Highest revenue items in last {days} days",
+        "subtitle": f"Highest revenue items in last {days} days" if top_p_data else "No product sales in this period",
         "labels": top_p_names,
         "datasets": [{"label": "Revenue (₹)", "data": top_p_revs, "color": "#06b6d4"}]
     }
@@ -421,7 +512,7 @@ def get_sales_analytics_charts(days: int = 30, store_id: Optional[str] = "all", 
     store_chart = {
         "type": "bar",
         "title": "Store Performance Comparison",
-        "subtitle": "Revenue breakdown across retail store locations",
+        "subtitle": "Revenue breakdown across retail store locations" if stores else "No store performance data available",
         "labels": st_names,
         "datasets": [{"label": "Store Revenue (₹)", "data": st_revs, "color": "#f59e0b"}]
     }
@@ -435,11 +526,16 @@ def get_sales_analytics_charts(days: int = 30, store_id: Optional[str] = "all", 
     top_cat = categories[0]["category"] if categories else "N/A"
     top_st = stores[0]["store_name"] if stores else "N/A"
 
-    insights = [
-        f"Total revenue reached ₹{total_revenue_val:,.2f} with {total_units_val:,} units sold over the last {days} days.",
-        f"Category '{top_cat}' is the primary revenue driver at ₹{categories[0]['total_revenue']:,.2f}.",
-        f"Top performing store location is '{top_st}' generating ₹{stores[0]['total_revenue']:,.2f} total revenue.",
-    ]
+    insights = []
+    if daily:
+        insights.append(f"Total revenue reached ₹{total_revenue_val:,.2f} with {total_units_val:,} units sold over the last {days} days.")
+    else:
+        insights.append(f"No sales transactions recorded over the last {days} days.")
+
+    if categories:
+        insights.append(f"Category '{top_cat}' is the primary revenue driver at ₹{categories[0]['total_revenue']:,.2f}.")
+    if stores:
+        insights.append(f"Top performing store location is '{top_st}' generating ₹{stores[0]['total_revenue']:,.2f} total revenue.")
 
     if spikes:
         s0 = spikes[0]
@@ -461,9 +557,10 @@ def get_sales_analytics_charts(days: int = 30, store_id: Optional[str] = "all", 
         "insights": insights
     }
 
-def compare_stores_analytics(store_ids: List[str], time_days: int = 30, target_date: Optional[str] = None) -> Dict[str, Any]:
+def compare_stores_analytics(store_ids: Optional[List[str]] = None, time_days: int = 30, target_date: Optional[str] = None) -> Dict[str, Any]:
     """
     Compares selected stores side-by-side across revenue, units, growth, stock risks, and trend specs.
+    Dynamically loads and compares all stores in the active dataset by default.
     """
     from src.dataset_manager import ActiveDatasetManager
     if ActiveDatasetManager.get_active_dataset_id() is None:
@@ -479,17 +576,10 @@ def compare_stores_analytics(store_ids: List[str], time_days: int = 30, target_d
             "insights": []
         }
 
-    all_db_stores = query_all("SELECT store_id FROM stores ORDER BY store_id")
+    all_db_stores = query_all("SELECT store_id, store_name, location FROM stores ORDER BY store_id")
     available_ids = [s["store_id"] for s in all_db_stores]
     
-    if not store_ids or len(store_ids) == 0:
-        store_ids = available_ids[:min(5, len(available_ids))]
-    else:
-        # Filter to existing store_ids or fallback
-        valid_ids = [s for s in store_ids if s in available_ids]
-        store_ids = valid_ids if valid_ids else available_ids[:min(5, len(available_ids))]
-    
-    if not store_ids:
+    if not available_ids:
         return {
             "stores_count": 0,
             "comparison_table": [],
@@ -502,14 +592,19 @@ def compare_stores_analytics(store_ids: List[str], time_days: int = 30, target_d
             "insights": []
         }
 
+    if not store_ids or len(store_ids) == 0 or "all" in [str(s).lower() for s in store_ids if s]:
+        selected_ids = available_ids
+    else:
+        valid_ids = [s for s in store_ids if s in available_ids]
+        selected_ids = valid_ids if valid_ids else available_ids
+
     date_filter = ""
     params = [time_days]
     if target_date:
         date_filter = "AND s.date <= ?"
         params.append(target_date)
 
-    placeholders = ",".join(["?"] * len(store_ids))
-    params_stores = list(params) + list(store_ids)
+    placeholders = ",".join(["?"] * len(selected_ids))
 
     # 1. Total Revenue & Units per Store
     sql_stores = f"""
@@ -534,7 +629,7 @@ def compare_stores_analytics(store_ids: List[str], time_days: int = 30, target_d
     sql_params = [target_date, time_days]
     if target_date:
         sql_params.append(target_date)
-    sql_params.extend(store_ids)
+    sql_params.extend(selected_ids)
 
     df_comp = query_df(sql_stores, tuple(sql_params))
     
@@ -545,11 +640,12 @@ def compare_stores_analytics(store_ids: List[str], time_days: int = 30, target_d
     comparison_results = []
     datasets_trend = []
 
-    # Get color palette for comparative charts
-    colors = ["#087F80", "#2563EB", "#D97706", "#8B5CF6", "#EC4899"]
+    # Dynamic color palette for comparative charts
+    colors = ["#087F80", "#2563EB", "#D97706", "#8B5CF6", "#EC4899", "#10B981", "#6366F1", "#F97316"]
+    dates_list = []
 
-    for idx, s_id in enumerate(store_ids):
-        s_row = df_comp[df_comp["store_id"] == s_id]
+    for idx, s_id in enumerate(selected_ids):
+        s_row = df_comp[df_comp["store_id"] == s_id] if not df_comp.empty else pd.DataFrame()
         if s_row.empty:
             continue
         s_data = s_row.iloc[0].to_dict()
@@ -571,8 +667,11 @@ def compare_stores_analytics(store_ids: List[str], time_days: int = 30, target_d
         daily_params = [s_id, target_date, time_days]
         df_daily = query_df(daily_sql, tuple(daily_params))
         
-        dates_list = df_daily["date"].tolist() if not df_daily.empty else []
-        revs_list = df_daily["daily_rev"].tolist() if not df_daily.empty else []
+        cur_dates = df_daily["date"].tolist() if not df_daily.empty else []
+        cur_revs = df_daily["daily_rev"].tolist() if not df_daily.empty else []
+
+        if len(cur_dates) > len(dates_list):
+            dates_list = cur_dates
 
         s_data["critical_items"] = crit_count
         s_data["warning_items"] = warn_count
@@ -582,18 +681,15 @@ def compare_stores_analytics(store_ids: List[str], time_days: int = 30, target_d
 
         comparison_results.append(s_data)
 
-        if dates_list:
+        if cur_dates:
             datasets_trend.append({
                 "label": s_data["store_name"],
-                "data": revs_list,
+                "data": cur_revs,
                 "color": colors[idx % len(colors)]
             })
 
     # Sort comparison results by revenue
     comparison_results.sort(key=lambda x: x["total_revenue"], reverse=True)
-
-    # Master dates list from top store
-    master_dates = dates_list if 'dates_list' in locals() else []
 
     return {
         "timeframe_days": time_days,
@@ -605,8 +701,8 @@ def compare_stores_analytics(store_ids: List[str], time_days: int = 30, target_d
         "comparison_chart": {
             "type": "line",
             "title": f"Store Revenue Comparison ({time_days} Days)",
-            "subtitle": "Daily revenue trajectory side-by-side",
-            "labels": master_dates,
+            "subtitle": f"Comparing {len(comparison_results)} stores side-by-side",
+            "labels": dates_list,
             "datasets": datasets_trend
         }
     }
@@ -615,6 +711,27 @@ def get_yearly_performance(store_id: Optional[str] = "all") -> Dict[str, Any]:
     """
     Computes yearly sales performance breakdown, YoY growth %, and highlights dynamically based on active dataset.
     """
+    from src.dataset_manager import ActiveDatasetManager
+    if ActiveDatasetManager.get_active_dataset_id() is None:
+        return {
+            "yearly_table": [],
+            "best_year": "N/A",
+            "fastest_growth_year": "N/A",
+            "lowest_year": "N/A",
+            "yearly_chart": {
+                "type": "bar",
+                "title": "Annual Revenue by Year",
+                "labels": [],
+                "datasets": [{"label": "Annual Revenue (₹)", "data": [], "color": "#087F80"}]
+            },
+            "growth_chart": {
+                "type": "line",
+                "title": "YoY Revenue Growth Rate (%)",
+                "labels": [],
+                "datasets": [{"label": "YoY Growth (%)", "data": [], "color": "#2563EB"}]
+            }
+        }
+
     resolved_store = resolve_store_id(store_id)
     where_parts = []
     params = []
@@ -637,7 +754,24 @@ def get_yearly_performance(store_id: Optional[str] = "all") -> Dict[str, Any]:
     """
     rows = query_all(sql, tuple(params))
     if not rows:
-        return {"yearly_table": [], "best_year": "N/A", "fastest_growth_year": "N/A", "lowest_year": "N/A", "yearly_chart": {"type": "bar", "title": "Annual Revenue by Year", "labels": [], "datasets": [{"label": "Annual Revenue (₹)", "data": [], "color": "#087F80"}]}}
+        return {
+            "yearly_table": [],
+            "best_year": "N/A",
+            "fastest_growth_year": "N/A",
+            "lowest_year": "N/A",
+            "yearly_chart": {
+                "type": "bar",
+                "title": "Annual Revenue by Year",
+                "labels": [],
+                "datasets": [{"label": "Annual Revenue (₹)", "data": [], "color": "#087F80"}]
+            },
+            "growth_chart": {
+                "type": "line",
+                "title": "YoY Revenue Growth Rate (%)",
+                "labels": [],
+                "datasets": [{"label": "YoY Growth (%)", "data": [], "color": "#2563EB"}]
+            }
+        }
 
     yearly_data = []
     prev_rev = None
@@ -657,18 +791,20 @@ def get_yearly_performance(store_id: Optional[str] = "all") -> Dict[str, Any]:
         prev_rev = rev
         prev_units = units
 
-    best_year = max(yearly_data, key=lambda x: x["total_revenue"])["year"]
-    lowest_year = min(yearly_data, key=lambda x: x["total_revenue"])["year"]
+    best_year = max(yearly_data, key=lambda x: x["total_revenue"])["year"] if yearly_data else "N/A"
+    lowest_year = min(yearly_data, key=lambda x: x["total_revenue"])["year"] if yearly_data else "N/A"
     fastest_growth = max(yearly_data[1:], key=lambda x: x["yoy_revenue_growth"])["year"] if len(yearly_data) > 1 else best_year
 
-    years = [y["year"] for y in yearly_data]
-    revs = [y["total_revenue"] for y in yearly_data]
-    growth_rates = [y["yoy_revenue_growth"] for y in yearly_data]
+    years = [y["year"] for y in yearly_data if y.get("year")]
+    revs = [y["total_revenue"] for y in yearly_data if y.get("year")]
+    growth_rates = [y["yoy_revenue_growth"] for y in yearly_data if y.get("year")]
 
     if len(years) > 1:
         chart_title = f"Annual Revenue by Year ({years[0]} - {years[-1]})"
-    else:
+    elif len(years) == 1:
         chart_title = f"Annual Revenue ({years[0]})"
+    else:
+        chart_title = "Annual Revenue by Year"
 
     return {
         "yearly_table": yearly_data,
@@ -692,7 +828,26 @@ def get_yearly_performance(store_id: Optional[str] = "all") -> Dict[str, Any]:
 def get_seasonality_analysis(store_id: Optional[str] = "all") -> Dict[str, Any]:
     """
     Computes average monthly revenue and units across all recorded periods in active dataset.
+    Validates date coverage and safely flags INSUFFICIENT_HISTORY when data span < 3 distinct months.
     """
+    from src.dataset_manager import ActiveDatasetManager
+    ds_id = ActiveDatasetManager.get_active_dataset_id()
+    if ds_id is None:
+        return {
+            "status": "NO_DATA",
+            "message": "No dataset active. Upload your retail data to calculate seasonality.",
+            "seasonality_table": [],
+            "peak_month": "N/A",
+            "unique_months": 0,
+            "seasonality_chart": {
+                "type": "bar",
+                "title": "Monthly Demand Seasonality Profile",
+                "subtitle": "No monthly data available",
+                "labels": [],
+                "datasets": [{"label": "Avg Monthly Revenue (₹)", "data": [], "color": "#D97706"}]
+            }
+        }
+    
     resolved_store = resolve_store_id(store_id)
     where_parts = []
     params = []
@@ -702,36 +857,92 @@ def get_seasonality_analysis(store_id: Optional[str] = "all") -> Dict[str, Any]:
 
     where_clause = " WHERE " + " AND ".join(where_parts) if where_parts else ""
 
+    # Check date bounds and historical coverage
+    stats_query = f"""
+        SELECT 
+            MIN(date) as min_d,
+            MAX(date) as max_d,
+            COUNT(DISTINCT date) as unique_dates,
+            COUNT(DISTINCT strftime('%Y-%m', date)) as unique_months
+        FROM sales
+        {where_clause}
+    """
+    stats_row = query_one(stats_query, tuple(params))
+    min_date = str(stats_row["min_d"]) if stats_row and stats_row.get("min_d") else "N/A"
+    max_date = str(stats_row["max_d"]) if stats_row and stats_row.get("max_d") else "N/A"
+    unique_dates = int(stats_row["unique_dates"]) if stats_row and stats_row.get("unique_dates") is not None else 0
+    unique_months = int(stats_row["unique_months"]) if stats_row and stats_row.get("unique_months") is not None else 0
+
+    print(f"[SEASONALITY] dataset_id: {ds_id} | date_min: {min_date} | date_max: {max_date} | unique_dates: {unique_dates} | unique_months: {unique_months} | store_scope: {store_id or 'all'}")
+
+    # Seasonality requires at least 3 distinct calendar months to show meaningful seasonal patterns
+    if unique_months < 3:
+        return {
+            "status": "INSUFFICIENT_HISTORY",
+            "message": "Not enough historical data in the active dataset to calculate a reliable seasonal pattern.",
+            "unique_months": unique_months,
+            "date_min": min_date,
+            "date_max": max_date,
+            "seasonality_table": [],
+            "peak_month": "N/A",
+            "seasonality_chart": {
+                "type": "bar",
+                "title": "Monthly Demand Seasonality Profile",
+                "subtitle": "Insufficient historical data for seasonality",
+                "labels": [],
+                "datasets": [{"label": "Avg Monthly Revenue (₹)", "data": [], "color": "#D97706"}]
+            }
+        }
+
     sql = f"""
         SELECT 
-            month as month_num,
+            m as month_num,
+            COUNT(DISTINCT y) as years_count,
             ROUND(AVG(monthly_rev), 2) as avg_revenue,
-            ROUND(AVG(monthly_units), 1) as avg_units
+            ROUND(AVG(monthly_units), 2) as avg_units
         FROM (
             SELECT 
-                strftime('%Y-%m', date) as year_month,
-                strftime('%m', date) as month,
+                strftime('%Y', date) as y,
+                strftime('%m', date) as m,
                 SUM(total_revenue) as monthly_rev,
                 SUM(quantity) as monthly_units
             FROM sales
             {where_clause}
-            GROUP BY year_month, month
+            GROUP BY y, m
         )
-        GROUP BY month_num
-        ORDER BY month_num ASC
+        GROUP BY m
+        ORDER BY CAST(m AS INTEGER) ASC
     """
     rows = query_all(sql, tuple(params))
+    if not rows:
+        return {
+            "status": "INSUFFICIENT_HISTORY",
+            "message": "No sales records available to compute seasonality.",
+            "unique_months": 0,
+            "date_min": min_date,
+            "date_max": max_date,
+            "seasonality_table": [],
+            "peak_month": "N/A",
+            "seasonality_chart": {
+                "type": "bar",
+                "title": "Monthly Demand Seasonality Profile",
+                "subtitle": "No monthly data available",
+                "labels": [],
+                "datasets": [{"label": "Avg Monthly Revenue (₹)", "data": [], "color": "#D97706"}]
+            }
+        }
     
     month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     labels = []
     avg_revs = []
 
     for r in rows:
-        m_idx = int(r["month_num"]) - 1
-        m_name = month_names[m_idx] if 0 <= m_idx < 12 else r["month_num"]
+        m_val = r.get("month_num")
+        m_idx = int(m_val) - 1 if (m_val and str(m_val).isdigit()) else 0
+        m_name = month_names[m_idx] if 0 <= m_idx < 12 else str(m_val or "Unknown")
         r["month_name"] = m_name
         labels.append(m_name)
-        avg_revs.append(r["avg_revenue"])
+        avg_revs.append(r.get("avg_revenue", 0.0))
 
     if len(labels) == 12:
         title = "Monthly Demand Seasonality Profile (Jan - Dec)"
@@ -746,9 +957,16 @@ def get_seasonality_analysis(store_id: Optional[str] = "all") -> Dict[str, Any]:
         title = "Monthly Demand Seasonality Profile"
         subtitle = "No monthly data available"
 
+    peak_month = max(rows, key=lambda x: x.get("avg_revenue", 0))["month_name"] if rows else "N/A"
+
     return {
+        "status": "SUCCESS",
+        "message": f"Seasonality computed across {len(labels)} months.",
+        "unique_months": unique_months,
+        "date_min": min_date,
+        "date_max": max_date,
         "seasonality_table": rows,
-        "peak_month": max(rows, key=lambda x: x["avg_revenue"])["month_name"] if rows else "N/A",
+        "peak_month": peak_month,
         "seasonality_chart": {
             "type": "bar",
             "title": title,

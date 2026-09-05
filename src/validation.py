@@ -73,7 +73,14 @@ def validate_and_enrich_payload(query_spec: Dict[str, Any], analytics_result: Di
             if filtered_ev:
                 response_payload["evidence"] = filtered_ev
 
-    # 4. CHART & EVIDENCE SYNCHRONIZATION
+    # 4. INFORMATIONAL & CATALOGUE QUERY VALIDATION
+    if intent in ["PRODUCT_LIST", "STORE_LIST", "PRODUCT_COUNT", "STORE_COUNT", "INVENTORY_SUMMARY"]:
+        # Catalogue queries must not carry unrequested charts or recommendations
+        response_payload["chart"] = None
+        if not analytics_result.get("recommendations"):
+            response_payload["recommendations"] = []
+
+    # 5. CHART & EVIDENCE SYNCHRONIZATION
     chart_spec = response_payload.get("chart")
     if chart_spec and (not chart_spec.get("labels") or not chart_spec.get("datasets")):
         logger.warning("Empty chart detected during validation. Collapsing chart container.")

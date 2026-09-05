@@ -35,6 +35,7 @@ class QueryContext:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "user_query": self.raw_question,
             "raw_question": self.raw_question,
             "intent": self.intent,
             "metric": self.metric,
