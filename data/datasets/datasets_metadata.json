@@ -14,7 +14,7 @@
       "max_date": "2026-09-03",
       "total_revenue": 88957368.0,
       "total_units_sold": 358422,
-      "created_at": "2026-09-05T16:30:06.020198"
+      "created_at": "2026-09-05T16:35:37.009186"
     },
     "ds_a3f1cafb": {
       "dataset_id": "ds_a3f1cafb",
@@ -346,8 +346,8 @@
       "total_units_sold": 10,
       "created_at": "2026-09-05T16:18:25.105921"
     },
-    "ds_eee6a5b1": {
-      "dataset_id": "ds_eee6a5b1",
+    "ds_5d637e2b": {
+      "dataset_id": "ds_5d637e2b",
       "dataset_name": "Clean Dataset",
       "is_demo": false,
       "store_count": 1,
@@ -359,10 +359,10 @@
       "max_date": "2026-08-04",
       "total_revenue": 1700.0,
       "total_units_sold": 18,
-      "created_at": "2026-09-05T16:30:43.603662"
+      "created_at": "2026-09-05T16:37:06.610841"
     },
-    "ds_0ddb7a25": {
-      "dataset_id": "ds_0ddb7a25",
+    "ds_02181760": {
+      "dataset_id": "ds_02181760",
       "dataset_name": "Null Mixed",
       "is_demo": false,
       "store_count": 1,
@@ -374,10 +374,10 @@
       "max_date": "2026-08-01",
       "total_revenue": 1000.0,
       "total_units_sold": 11,
-      "created_at": "2026-09-05T16:30:43.734502"
+      "created_at": "2026-09-05T16:37:06.759465"
     },
-    "ds_fd9f1bb8": {
-      "dataset_id": "ds_fd9f1bb8",
+    "ds_d9aa92c1": {
+      "dataset_id": "ds_d9aa92c1",
       "dataset_name": "Data Type Dataset",
       "is_demo": false,
       "store_count": 1,
@@ -389,10 +389,10 @@
       "max_date": "2026-08-03",
       "total_revenue": 4000.5,
       "total_units_sold": 30,
-      "created_at": "2026-09-05T16:30:43.842637"
+      "created_at": "2026-09-05T16:37:06.936821"
     },
-    "ds_eecc07c7": {
-      "dataset_id": "ds_eecc07c7",
+    "ds_71d1e4af": {
+      "dataset_id": "ds_71d1e4af",
       "dataset_name": "Duplicate Test",
       "is_demo": false,
       "store_count": 1,
@@ -404,10 +404,10 @@
       "max_date": "2026-08-02",
       "total_revenue": 2000.0,
       "total_units_sold": 20,
-      "created_at": "2026-09-05T16:30:44.019963"
+      "created_at": "2026-09-05T16:37:07.128348"
     },
-    "ds_95485961": {
-      "dataset_id": "ds_95485961",
+    "ds_c44fa45f": {
+      "dataset_id": "ds_c44fa45f",
       "dataset_name": "Ref Integrity Dataset",
       "is_demo": false,
       "store_count": 2,
@@ -419,10 +419,10 @@
       "max_date": "2026-07-10",
       "total_revenue": 4000.0,
       "total_units_sold": 40,
-      "created_at": "2026-09-05T16:30:44.176271"
+      "created_at": "2026-09-05T16:37:07.316429"
     },
-    "ds_fcfbfb32": {
-      "dataset_id": "ds_fcfbfb32",
+    "ds_f6561bc6": {
+      "dataset_id": "ds_f6561bc6",
       "dataset_name": "Date Edge Cases",
       "is_demo": false,
       "store_count": 1,
@@ -434,10 +434,10 @@
       "max_date": "2025-01-01",
       "total_revenue": 3000.0,
       "total_units_sold": 30,
-      "created_at": "2026-09-05T16:30:44.366298"
+      "created_at": "2026-09-05T16:37:07.506033"
     },
-    "ds_55df43dc": {
-      "dataset_id": "ds_55df43dc",
+    "ds_3edcf45f": {
+      "dataset_id": "ds_3edcf45f",
       "dataset_name": "Math Boundary Dataset",
       "is_demo": false,
       "store_count": 1,
@@ -449,10 +449,10 @@
       "max_date": "2026-08-10",
       "total_revenue": 40000.0,
       "total_units_sold": 400,
-      "created_at": "2026-09-05T16:30:44.501829"
+      "created_at": "2026-09-05T16:37:07.690754"
     },
-    "ds_162385c8": {
-      "dataset_id": "ds_162385c8",
+    "ds_208cffbc": {
+      "dataset_id": "ds_208cffbc",
       "dataset_name": "Dataset Alpha",
       "is_demo": false,
       "store_count": 1,
@@ -464,10 +464,10 @@
       "max_date": "2026-08-01",
       "total_revenue": 1111.0,
       "total_units_sold": 10,
-      "created_at": "2026-09-05T16:30:44.867998"
+      "created_at": "2026-09-05T16:37:07.976778"
     },
-    "ds_149ce825": {
-      "dataset_id": "ds_149ce825",
+    "ds_0d3bf42d": {
+      "dataset_id": "ds_0d3bf42d",
       "dataset_name": "Dataset Beta",
       "is_demo": false,
       "store_count": 1,
@@ -479,10 +479,10 @@
       "max_date": "2026-08-01",
       "total_revenue": 9999.0,
       "total_units_sold": 20,
-      "created_at": "2026-09-05T16:30:44.983552"
+      "created_at": "2026-09-05T16:37:08.150996"
     },
-    "ds_bf65cb12": {
-      "dataset_id": "ds_bf65cb12",
+    "ds_4d1d31ec": {
+      "dataset_id": "ds_4d1d31ec",
       "dataset_name": "4-CSV Alternate Headers",
       "is_demo": false,
       "store_count": 1,
@@ -494,157 +494,7 @@
       "max_date": "2026-08-01",
       "total_revenue": 1000.0,
       "total_units_sold": 10,
-      "created_at": "2026-09-05T16:30:45.235217"
-    },
-    "ds_e46a0142": {
-      "dataset_id": "ds_e46a0142",
-      "dataset_name": "Clean Dataset",
-      "is_demo": false,
-      "store_count": 1,
-      "product_count": 1,
-      "sales_count": 4,
-      "inventory_count": 1,
-      "total_stock_units": 10,
-      "min_date": "2026-08-01",
-      "max_date": "2026-08-04",
-      "total_revenue": 1700.0,
-      "total_units_sold": 18,
-      "created_at": "2026-09-05T16:31:05.316511"
-    },
-    "ds_1f49c1fd": {
-      "dataset_id": "ds_1f49c1fd",
-      "dataset_name": "Null Mixed",
-      "is_demo": false,
-      "store_count": 1,
-      "product_count": 1,
-      "sales_count": 2,
-      "inventory_count": 1,
-      "total_stock_units": 10,
-      "min_date": "2026-08-01",
-      "max_date": "2026-08-01",
-      "total_revenue": 1000.0,
-      "total_units_sold": 11,
-      "created_at": "2026-09-05T16:31:05.455898"
-    },
-    "ds_a70ec59e": {
-      "dataset_id": "ds_a70ec59e",
-      "dataset_name": "Data Type Dataset",
-      "is_demo": false,
-      "store_count": 1,
-      "product_count": 1,
-      "sales_count": 3,
-      "inventory_count": 1,
-      "total_stock_units": 10,
-      "min_date": "2026-08-01",
-      "max_date": "2026-08-03",
-      "total_revenue": 4000.5,
-      "total_units_sold": 30,
-      "created_at": "2026-09-05T16:31:05.606358"
-    },
-    "ds_5a73441a": {
-      "dataset_id": "ds_5a73441a",
-      "dataset_name": "Duplicate Test",
-      "is_demo": false,
-      "store_count": 1,
-      "product_count": 1,
-      "sales_count": 3,
-      "inventory_count": 1,
-      "total_stock_units": 10,
-      "min_date": "2026-08-01",
-      "max_date": "2026-08-02",
-      "total_revenue": 2000.0,
-      "total_units_sold": 20,
-      "created_at": "2026-09-05T16:31:05.783393"
-    },
-    "ds_cef96b21": {
-      "dataset_id": "ds_cef96b21",
-      "dataset_name": "Ref Integrity Dataset",
-      "is_demo": false,
-      "store_count": 2,
-      "product_count": 2,
-      "sales_count": 4,
-      "inventory_count": 4,
-      "total_stock_units": 85,
-      "min_date": "2026-07-01",
-      "max_date": "2026-07-10",
-      "total_revenue": 4000.0,
-      "total_units_sold": 40,
-      "created_at": "2026-09-05T16:31:05.959038"
-    },
-    "ds_0f689f23": {
-      "dataset_id": "ds_0f689f23",
-      "dataset_name": "Date Edge Cases",
-      "is_demo": false,
-      "store_count": 1,
-      "product_count": 1,
-      "sales_count": 3,
-      "inventory_count": 1,
-      "total_stock_units": 10,
-      "min_date": "2024-02-29",
-      "max_date": "2025-01-01",
-      "total_revenue": 3000.0,
-      "total_units_sold": 30,
-      "created_at": "2026-09-05T16:31:06.133359"
-    },
-    "ds_7916562c": {
-      "dataset_id": "ds_7916562c",
-      "dataset_name": "Math Boundary Dataset",
-      "is_demo": false,
-      "store_count": 1,
-      "product_count": 9,
-      "sales_count": 80,
-      "inventory_count": 9,
-      "total_stock_units": 842,
-      "min_date": "2026-08-01",
-      "max_date": "2026-08-10",
-      "total_revenue": 40000.0,
-      "total_units_sold": 400,
-      "created_at": "2026-09-05T16:31:06.335199"
-    },
-    "ds_ed6eb01f": {
-      "dataset_id": "ds_ed6eb01f",
-      "dataset_name": "Dataset Alpha",
-      "is_demo": false,
-      "store_count": 1,
-      "product_count": 1,
-      "sales_count": 1,
-      "inventory_count": 1,
-      "total_stock_units": 50,
-      "min_date": "2026-08-01",
-      "max_date": "2026-08-01",
-      "total_revenue": 1111.0,
-      "total_units_sold": 10,
-      "created_at": "2026-09-05T16:31:06.701834"
-    },
-    "ds_8c42aeb6": {
-      "dataset_id": "ds_8c42aeb6",
-      "dataset_name": "Dataset Beta",
-      "is_demo": false,
-      "store_count": 1,
-      "product_count": 1,
-      "sales_count": 1,
-      "inventory_count": 1,
-      "total_stock_units": 90,
-      "min_date": "2026-08-01",
-      "max_date": "2026-08-01",
-      "total_revenue": 9999.0,
-      "total_units_sold": 20,
-      "created_at": "2026-09-05T16:31:06.859682"
-    },
-    "ds_91afdf99": {
-      "dataset_id": "ds_91afdf99",
-      "dataset_name": "4-CSV Alternate Headers",
-      "is_demo": false,
-      "store_count": 1,
-      "product_count": 1,
-      "sales_count": 1,
-      "inventory_count": 2,
-      "total_stock_units": 60,
-      "min_date": "2026-08-01",
-      "max_date": "2026-08-01",
-      "total_revenue": 1000.0,
-      "total_units_sold": 10,
-      "created_at": "2026-09-05T16:31:07.201968"
+      "created_at": "2026-09-05T16:37:08.406876"
     }
   }
 }

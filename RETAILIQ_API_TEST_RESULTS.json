@@ -11,15 +11,15 @@
     "p3": 0,
     "p4": 0,
     "release_status": "READY",
-    "audit_timestamp": "2026-09-05T16:31:08.870007"
+    "audit_timestamp": "2026-09-05T16:37:09.600313"
   },
   "latencies_ms": {
-    "/api/dashboard": 17.901897430419922,
-    "/api/inventory": 26.966571807861328,
-    "/api/analytics/charts": 26.492834091186523,
-    "/api/reorder-plan": 15.358924865722656,
-    "/api/executive-report": 52.86240577697754,
-    "/api/seasonality": 3.357410430908203
+    "/api/dashboard": 28.395414352416992,
+    "/api/inventory": 7.976293563842773,
+    "/api/analytics/charts": 21.047353744506836,
+    "/api/reorder-plan": 30.931949615478516,
+    "/api/executive-report": 42.56629943847656,
+    "/api/seasonality": 15.274286270141602
   },
   "test_cases": [
     {
@@ -278,7 +278,7 @@
       "actual": "HTTP 200: Successfully activated dataset 'Clean Dataset'! 1 Stores, 1 Products, 4 Sales records loaded.",
       "status": "PASS",
       "severity": "P4",
-      "evidence": "Result: {'success': True, 'message': \"Successfully activated dataset 'Clean Dataset'! 1 Stores, 1 Products, 4 Sales records loaded.\", 'dataset': {'dataset_id': 'ds_e46a0142', 'dataset_name': 'Clean Dataset', 'is_demo': False, 'store_count': 1, 'product_count': 1, 'sales_count': 4, 'inventory_count': 1, 'total_stock_units': 10, 'min_date': '2026-08-01', 'max_date': '2026-08-04', 'total_revenue': 1700.0, 'total_units_sold': 18, 'created_at': '2026-09-05T16:31:05.316511'}}",
+      "evidence": "Result: {'success': True, 'message': \"Successfully activated dataset 'Clean Dataset'! 1 Stores, 1 Products, 4 Sales records loaded.\", 'dataset': {'dataset_id': 'ds_5d637e2b', 'dataset_name': 'Clean Dataset', 'is_demo': False, 'store_count': 1, 'product_count': 1, 'sales_count': 4, 'inventory_count': 1, 'total_stock_units': 10, 'min_date': '2026-08-01', 'max_date': '2026-08-04', 'total_revenue': 1700.0, 'total_units_sold': 18, 'created_at': '2026-09-05T16:37:06.610841'}}",
       "root_cause": "",
       "recommended_fix": ""
     },
@@ -291,7 +291,7 @@
       "actual": "HTTP 200: None",
       "status": "PASS",
       "severity": "P4",
-      "evidence": "Import response: {'success': True, 'message': \"Successfully activated dataset 'Null Mixed'! 1 Stores, 1 Products, 2 Sales records loaded.\", 'dataset': {'dataset_id': 'ds_1f49c1fd', 'dataset_name': 'Null Mixed', 'is_demo': False, 'store_count': 1, 'product_count': 1, 'sales_count': 2, 'inventory_count': 1, 'total_stock_units': 10, 'min_date': '2026-08-01', 'max_date': '2026-08-01', 'total_revenue': 1000.0, 'total_units_sold': 11, 'created_at': '2026-09-05T16:31:05.455898'}}",
+      "evidence": "Import response: {'success': True, 'message': \"Successfully activated dataset 'Null Mixed'! 1 Stores, 1 Products, 2 Sales records loaded.\", 'dataset': {'dataset_id': 'ds_02181760', 'dataset_name': 'Null Mixed', 'is_demo': False, 'store_count': 1, 'product_count': 1, 'sales_count': 2, 'inventory_count': 1, 'total_stock_units': 10, 'min_date': '2026-08-01', 'max_date': '2026-08-01', 'total_revenue': 1000.0, 'total_units_sold': 11, 'created_at': '2026-09-05T16:37:06.759465'}}",
       "root_cause": "",
       "recommended_fix": ""
     },
@@ -304,7 +304,7 @@
       "actual": "HTTP 200: Successfully activated dataset 'Data Type Dataset'! 1 Stores, 1 Products, 3 Sales records loaded.",
       "status": "PASS",
       "severity": "P4",
-      "evidence": "Result: {'success': True, 'message': \"Successfully activated dataset 'Data Type Dataset'! 1 Stores, 1 Products, 3 Sales records loaded.\", 'dataset': {'dataset_id': 'ds_a70ec59e', 'dataset_name': 'Data Type Dataset', 'is_demo': False, 'store_count': 1, 'product_count': 1, 'sales_count': 3, 'inventory_count': 1, 'total_stock_units': 10, 'min_date': '2026-08-01', 'max_date': '2026-08-03', 'total_revenue': 4000.5, 'total_units_sold': 30, 'created_at': '2026-09-05T16:31:05.606358'}}",
+      "evidence": "Result: {'success': True, 'message': \"Successfully activated dataset 'Data Type Dataset'! 1 Stores, 1 Products, 3 Sales records loaded.\", 'dataset': {'dataset_id': 'ds_d9aa92c1', 'dataset_name': 'Data Type Dataset', 'is_demo': False, 'store_count': 1, 'product_count': 1, 'sales_count': 3, 'inventory_count': 1, 'total_stock_units': 10, 'min_date': '2026-08-01', 'max_date': '2026-08-03', 'total_revenue': 4000.5, 'total_units_sold': 30, 'created_at': '2026-09-05T16:37:06.936821'}}",
       "root_cause": "",
       "recommended_fix": ""
     },
@@ -343,7 +343,7 @@
       "actual": "HTTP 200: Successfully activated dataset 'Ref Integrity Dataset'! 2 Stores, 2 Products, 4 Sales records loaded.",
       "status": "PASS",
       "severity": "P4",
-      "evidence": "Result: {'success': True, 'message': \"Successfully activated dataset 'Ref Integrity Dataset'! 2 Stores, 2 Products, 4 Sales records loaded.\", 'dataset': {'dataset_id': 'ds_cef96b21', 'dataset_name': 'Ref Integrity Dataset', 'is_demo': False, 'store_count': 2, 'product_count': 2, 'sales_count': 4, 'inventory_count': 4, 'total_stock_units': 85, 'min_date': '2026-07-01', 'max_date': '2026-07-10', 'total_revenue': 4000.0, 'total_units_sold': 40, 'created_at': '2026-09-05T16:31:05.959038'}}",
+      "evidence": "Result: {'success': True, 'message': \"Successfully activated dataset 'Ref Integrity Dataset'! 2 Stores, 2 Products, 4 Sales records loaded.\", 'dataset': {'dataset_id': 'ds_c44fa45f', 'dataset_name': 'Ref Integrity Dataset', 'is_demo': False, 'store_count': 2, 'product_count': 2, 'sales_count': 4, 'inventory_count': 4, 'total_stock_units': 85, 'min_date': '2026-07-01', 'max_date': '2026-07-10', 'total_revenue': 4000.0, 'total_units_sold': 40, 'created_at': '2026-09-05T16:37:07.316429'}}",
       "root_cause": "",
       "recommended_fix": ""
     },
@@ -369,7 +369,7 @@
       "actual": "HTTP 200: Successfully activated dataset 'Date Edge Cases'! 1 Stores, 1 Products, 3 Sales records loaded.",
       "status": "PASS",
       "severity": "P4",
-      "evidence": "Date edge case response: {'success': True, 'message': \"Successfully activated dataset 'Date Edge Cases'! 1 Stores, 1 Products, 3 Sales records loaded.\", 'dataset': {'dataset_id': 'ds_0f689f23', 'dataset_name': 'Date Edge Cases', 'is_demo': False, 'store_count': 1, 'product_count': 1, 'sales_count': 3, 'inventory_count': 1, 'total_stock_units': 10, 'min_date': '2024-02-29', 'max_date': '2025-01-01', 'total_revenue': 3000.0, 'total_units_sold': 30, 'created_at': '2026-09-05T16:31:06.133359'}}",
+      "evidence": "Date edge case response: {'success': True, 'message': \"Successfully activated dataset 'Date Edge Cases'! 1 Stores, 1 Products, 3 Sales records loaded.\", 'dataset': {'dataset_id': 'ds_f6561bc6', 'dataset_name': 'Date Edge Cases', 'is_demo': False, 'store_count': 1, 'product_count': 1, 'sales_count': 3, 'inventory_count': 1, 'total_stock_units': 10, 'min_date': '2024-02-29', 'max_date': '2025-01-01', 'total_revenue': 3000.0, 'total_units_sold': 30, 'created_at': '2026-09-05T16:37:07.506033'}}",
       "root_cause": "",
       "recommended_fix": ""
     },
@@ -382,7 +382,7 @@
       "actual": "HTTP 200: Successfully activated dataset 'Math Boundary Dataset'! 1 Stores, 9 Products, 80 Sales records loaded.",
       "status": "PASS",
       "severity": "P4",
-      "evidence": "Result: {'success': True, 'message': \"Successfully activated dataset 'Math Boundary Dataset'! 1 Stores, 9 Products, 80 Sales records loaded.\", 'dataset': {'dataset_id': 'ds_7916562c', 'dataset_name': 'Math Boundary Dataset', 'is_demo': False, 'store_count': 1, 'product_count': 9, 'sales_count': 80, 'inventory_count': 9, 'total_stock_units': 842, 'min_date': '2026-08-01', 'max_date': '2026-08-10', 'total_revenue': 40000.0, 'total_units_sold': 400, 'created_at': '2026-09-05T16:31:06.335199'}}",
+      "evidence": "Result: {'success': True, 'message': \"Successfully activated dataset 'Math Boundary Dataset'! 1 Stores, 9 Products, 80 Sales records loaded.\", 'dataset': {'dataset_id': 'ds_3edcf45f', 'dataset_name': 'Math Boundary Dataset', 'is_demo': False, 'store_count': 1, 'product_count': 9, 'sales_count': 80, 'inventory_count': 9, 'total_stock_units': 842, 'min_date': '2026-08-01', 'max_date': '2026-08-10', 'total_revenue': 40000.0, 'total_units_sold': 400, 'created_at': '2026-09-05T16:37:07.690754'}}",
       "root_cause": "",
       "recommended_fix": ""
     },
@@ -629,7 +629,7 @@
       "actual": "HTTP 200: Successfully activated dataset '4-CSV Alternate Headers'! 1 Stores, 1 Products, 1 Sales records loaded.",
       "status": "PASS",
       "severity": "P4",
-      "evidence": "Upload response: {'success': True, 'message': \"Successfully activated dataset '4-CSV Alternate Headers'! 1 Stores, 1 Products, 1 Sales records loaded.\", 'dataset': {'dataset_id': 'ds_91afdf99', 'dataset_name': '4-CSV Alternate Headers', 'is_demo': False, 'store_count': 1, 'product_count': 1, 'sales_count': 1, 'inventory_count': 2, 'total_stock_units': 60, 'min_date': '2026-08-01', 'max_date': '2026-08-01', 'total_revenue': 1000.0, 'total_units_sold': 10, 'created_at': '2026-09-05T16:31:07.201968'}}",
+      "evidence": "Upload response: {'success': True, 'message': \"Successfully activated dataset '4-CSV Alternate Headers'! 1 Stores, 1 Products, 1 Sales records loaded.\", 'dataset': {'dataset_id': 'ds_4d1d31ec', 'dataset_name': '4-CSV Alternate Headers', 'is_demo': False, 'store_count': 1, 'product_count': 1, 'sales_count': 1, 'inventory_count': 2, 'total_stock_units': 60, 'min_date': '2026-08-01', 'max_date': '2026-08-01', 'total_revenue': 1000.0, 'total_units_sold': 10, 'created_at': '2026-09-05T16:37:08.406876'}}",
       "root_cause": "",
       "recommended_fix": ""
     },
@@ -899,10 +899,10 @@
       "name": "Response Latency /api/dashboard",
       "action": "GET /api/dashboard",
       "expected": "Response time < 500ms",
-      "actual": "17.90 ms (HTTP 200)",
+      "actual": "28.40 ms (HTTP 200)",
       "status": "PASS",
       "severity": "P4",
-      "evidence": "Latency: 17.90ms",
+      "evidence": "Latency: 28.40ms",
       "root_cause": "",
       "recommended_fix": ""
     },
@@ -912,10 +912,10 @@
       "name": "Response Latency /api/inventory",
       "action": "GET /api/inventory",
       "expected": "Response time < 500ms",
-      "actual": "26.97 ms (HTTP 200)",
+      "actual": "7.98 ms (HTTP 200)",
       "status": "PASS",
       "severity": "P4",
-      "evidence": "Latency: 26.97ms",
+      "evidence": "Latency: 7.98ms",
       "root_cause": "",
       "recommended_fix": ""
     },
@@ -925,10 +925,10 @@
       "name": "Response Latency /api/analytics/charts",
       "action": "GET /api/analytics/charts",
       "expected": "Response time < 500ms",
-      "actual": "26.49 ms (HTTP 200)",
+      "actual": "21.05 ms (HTTP 200)",
       "status": "PASS",
       "severity": "P4",
-      "evidence": "Latency: 26.49ms",
+      "evidence": "Latency: 21.05ms",
       "root_cause": "",
       "recommended_fix": ""
     },
@@ -938,10 +938,10 @@
       "name": "Response Latency /api/reorder-plan",
       "action": "GET /api/reorder-plan",
       "expected": "Response time < 500ms",
-      "actual": "15.36 ms (HTTP 200)",
+      "actual": "30.93 ms (HTTP 200)",
       "status": "PASS",
       "severity": "P4",
-      "evidence": "Latency: 15.36ms",
+      "evidence": "Latency: 30.93ms",
       "root_cause": "",
       "recommended_fix": ""
     },
@@ -951,10 +951,10 @@
       "name": "Response Latency /api/executive-report",
       "action": "GET /api/executive-report",
       "expected": "Response time < 500ms",
-      "actual": "52.86 ms (HTTP 200)",
+      "actual": "42.57 ms (HTTP 200)",
       "status": "PASS",
       "severity": "P4",
-      "evidence": "Latency: 52.86ms",
+      "evidence": "Latency: 42.57ms",
       "root_cause": "",
       "recommended_fix": ""
     },
@@ -964,10 +964,10 @@
       "name": "Response Latency /api/seasonality",
       "action": "GET /api/seasonality",
       "expected": "Response time < 500ms",
-      "actual": "3.36 ms (HTTP 200)",
+      "actual": "15.27 ms (HTTP 200)",
       "status": "PASS",
       "severity": "P4",
-      "evidence": "Latency: 3.36ms",
+      "evidence": "Latency: 15.27ms",
       "root_cause": "",
       "recommended_fix": ""
     },
