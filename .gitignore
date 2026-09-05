@@ -5,6 +5,9 @@ __pycache__/
 venv/
 ENV/
 env/
+.clean_env/
+.clean_env311/
+.qa_venv/
 .env
 *.sqlite
 *.db
@@ -12,5 +15,3 @@ env/
 .idea/
 .vscode/
 scratch/
-.clean_env/
-.qa_venv/
