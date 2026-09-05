@@ -15,7 +15,7 @@ from typing import Optional, List, Dict, Any
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.database import init_db, query_all, query_one
-from src.dataset_manager import ActiveDatasetManager, create_and_activate_dataset, validate_and_profile_retail_data
+from src.dataset_manager import ActiveDatasetManager, create_and_activate_dataset, validate_and_profile_retail_data, delete_dataset as ds_delete
 from src.analytics import get_dashboard_summary
 from src.inventory_rules import get_inventory_status_df, get_low_stock_items, get_slow_moving_items, get_overstocked_items, TARGET_COVERAGE_DAYS
 from src.sales_rules import get_product_sales_trends, get_sales_spikes, get_sales_drops, get_store_performance, get_category_performance, get_daily_sales_trend, get_yearly_performance, get_seasonality_analysis, get_sales_analytics_charts
@@ -110,6 +110,28 @@ def api_clear_dataset():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.delete("/api/datasets/{dataset_id}")
+def api_delete_dataset(dataset_id: str):
+    """
+    Permanently deletes a dataset: removes its SQLite file and metadata entry.
+    - demo cannot be deleted (400).
+    - Deleting the currently active dataset transitions to NO_DATA (never auto-activates demo).
+    - Returns 404 if dataset not found in registry.
+    """
+    try:
+        ds_delete(dataset_id)
+        return {
+            "success": True,
+            "message": f"Dataset '{dataset_id}' has been permanently deleted."
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except RuntimeError as re:
+        raise HTTPException(status_code=500, detail=str(re))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/datasets/validate")
 async def api_validate_dataset(
     file: Optional[UploadFile] = File(None),
@@ -128,8 +150,16 @@ async def api_validate_dataset(
         prods_df = None
         stores_df = None
 
-        if file is not None:
+        if file is not None and file.filename:
             fname = file.filename.lower()
+            if not (fname.endswith(".csv") or fname.endswith(".xlsx") or fname.endswith(".xls")):
+                return {
+                    "is_valid": False,
+                    "errors": ["Invalid file type. Please upload a CSV or supported Excel file."],
+                    "warnings": [],
+                    "summary": {},
+                    "column_mappings": {}
+                }
             content = await file.read()
             if fname.endswith(".xlsx") or fname.endswith(".xls"):
                 excel_file = pd.ExcelFile(io.BytesIO(content))
@@ -147,22 +177,40 @@ async def api_validate_dataset(
                     stores_df = pd.read_excel(io.BytesIO(content), sheet_name=store_sheet)
             else:
                 sales_df = pd.read_csv(io.BytesIO(content))
+        else:
+            missing_errors = []
+            if not sales_file or not sales_file.filename:
+                missing_errors.append("Sales CSV is required.")
+            if not inventory_file or not inventory_file.filename:
+                missing_errors.append("Inventory CSV is required.")
+            if not products_file or not products_file.filename:
+                missing_errors.append("Products CSV is required.")
+            if not stores_file or not stores_file.filename:
+                missing_errors.append("Stores CSV is required.")
 
-        if sales_file is not None:
-            content = await sales_file.read()
-            sales_df = pd.read_csv(io.BytesIO(content))
+            if missing_errors:
+                return {
+                    "is_valid": False,
+                    "errors": missing_errors,
+                    "warnings": [],
+                    "summary": {},
+                    "column_mappings": {}
+                }
 
-        if inventory_file is not None:
-            content = await inventory_file.read()
-            inv_df = pd.read_csv(io.BytesIO(content))
+            for f_obj, name_label in [(sales_file, "Sales"), (inventory_file, "Inventory"), (products_file, "Products"), (stores_file, "Stores")]:
+                if not f_obj.filename.lower().endswith(".csv"):
+                    return {
+                        "is_valid": False,
+                        "errors": [f"Invalid file type for {name_label}. Please upload a CSV file."],
+                        "warnings": [],
+                        "summary": {},
+                        "column_mappings": {}
+                    }
 
-        if products_file is not None:
-            content = await products_file.read()
-            prods_df = pd.read_csv(io.BytesIO(content))
-
-        if stores_file is not None:
-            content = await stores_file.read()
-            stores_df = pd.read_csv(io.BytesIO(content))
+            sales_df = pd.read_csv(io.BytesIO(await sales_file.read()))
+            inv_df = pd.read_csv(io.BytesIO(await inventory_file.read()))
+            prods_df = pd.read_csv(io.BytesIO(await products_file.read()))
+            stores_df = pd.read_csv(io.BytesIO(await stores_file.read()))
 
         report = validate_and_profile_retail_data(
             sales_df=sales_df,
@@ -204,28 +252,19 @@ async def api_upload_dataset(
         prods_df = None
         stores_df = None
 
-        name = dataset_name.strip() if dataset_name and dataset_name.strip() else None
+        name = dataset_name.strip() if dataset_name else ""
+        if not name:
+            raise HTTPException(status_code=400, detail="Dataset name is required.")
 
-        # Helper to read file bytes into pandas
-        def parse_file(uploaded: UploadFile) -> pd.DataFrame:
-            content = uploaded.file.read()
-            fname = uploaded.filename.lower()
-            if fname.endswith(".xlsx") or fname.endswith(".xls"):
-                return pd.read_excel(io.BytesIO(content))
-            else:
-                return pd.read_csv(io.BytesIO(content))
-
-        # Check if single multi-sheet Excel or single file uploaded
-        if file is not None:
+        # Single File Mode vs 4 CSV Mode
+        if file is not None and file.filename:
             fname = file.filename.lower()
-            name = name or file.filename.rsplit(".", 1)[0].replace("_", " ").title()
-            content = await file.read()
+            if not (fname.endswith(".csv") or fname.endswith(".xlsx") or fname.endswith(".xls")):
+                raise HTTPException(status_code=400, detail="Invalid file type. Please upload a CSV or supported Excel file.")
 
+            content = await file.read()
             if fname.endswith(".xlsx") or fname.endswith(".xls"):
                 excel_file = pd.ExcelFile(io.BytesIO(content))
-                sheet_names = [s.lower().strip() for s in excel_file.sheet_names]
-                
-                # Check for named sheets
                 sales_sheet = next((s for s in excel_file.sheet_names if "sale" in s.lower() or "transaction" in s.lower()), None)
                 inv_sheet = next((s for s in excel_file.sheet_names if "inv" in s.lower() or "stock" in s.lower()), None)
                 prod_sheet = next((s for s in excel_file.sheet_names if "prod" in s.lower() or "item" in s.lower() or "sku" in s.lower()), None)
@@ -235,40 +274,38 @@ async def api_upload_dataset(
                     sales_df = pd.read_excel(io.BytesIO(content), sheet_name=sales_sheet)
                 else:
                     sales_df = pd.read_excel(io.BytesIO(content), sheet_name=0)
-                
+
                 if inv_sheet:
                     inv_df = pd.read_excel(io.BytesIO(content), sheet_name=inv_sheet)
                 if prod_sheet:
                     prods_df = pd.read_excel(io.BytesIO(content), sheet_name=prod_sheet)
                 if store_sheet:
                     stores_df = pd.read_excel(io.BytesIO(content), sheet_name=store_sheet)
-
             else:
-                # Single CSV file
                 sales_df = pd.read_csv(io.BytesIO(content))
 
-        # Separate multi-file upload
-        if sales_file is not None:
-            content = await sales_file.read()
-            sales_df = pd.read_csv(io.BytesIO(content))
-            name = name or sales_file.filename.rsplit(".", 1)[0].replace("_", " ").title()
+        else:
+            # 4 Separate CSVs Mode: ALL FOUR REQUIRED
+            if not sales_file or not sales_file.filename:
+                raise HTTPException(status_code=400, detail="Sales CSV is required.")
+            if not inventory_file or not inventory_file.filename:
+                raise HTTPException(status_code=400, detail="Inventory CSV is required.")
+            if not products_file or not products_file.filename:
+                raise HTTPException(status_code=400, detail="Products CSV is required.")
+            if not stores_file or not stores_file.filename:
+                raise HTTPException(status_code=400, detail="Stores CSV is required.")
 
-        if inventory_file is not None:
-            content = await inventory_file.read()
-            inv_df = pd.read_csv(io.BytesIO(content))
+            for f_obj in [sales_file, inventory_file, products_file, stores_file]:
+                if not (f_obj.filename or "").lower().endswith(".csv"):
+                    raise HTTPException(status_code=400, detail="Invalid file type. Please upload a CSV or supported Excel file.")
 
-        if products_file is not None:
-            content = await products_file.read()
-            prods_df = pd.read_csv(io.BytesIO(content))
-
-        if stores_file is not None:
-            content = await stores_file.read()
-            stores_df = pd.read_csv(io.BytesIO(content))
+            sales_df = pd.read_csv(io.BytesIO(await sales_file.read()))
+            inv_df = pd.read_csv(io.BytesIO(await inventory_file.read()))
+            prods_df = pd.read_csv(io.BytesIO(await products_file.read()))
+            stores_df = pd.read_csv(io.BytesIO(await stores_file.read()))
 
         if sales_df is None or sales_df.empty:
             raise HTTPException(status_code=400, detail="No valid sales data found in uploaded file(s). Please provide a CSV or Excel file containing transaction/sales records.")
-
-        name = name or "Custom Retail Dataset"
 
         # Execute atomic import & activation
         metrics = create_and_activate_dataset(

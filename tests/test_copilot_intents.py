@@ -8,16 +8,45 @@ from src.dataset_manager import ActiveDatasetManager
 from src.query_engine import process_query_intent
 from src.gemini import generate_copilot_response
 
+import pandas as pd
+from src.dataset_manager import create_and_activate_dataset
+
 class TestCopilotIntents(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        # Activate custom dataset or demo for testing
-        sales_datasets = [d for d in ActiveDatasetManager.list_datasets() if d.get("dataset_name") == "Sales"]
-        if sales_datasets:
-            ActiveDatasetManager.activate_dataset(sales_datasets[0]["dataset_id"])
-        else:
-            ActiveDatasetManager.activate_dataset("demo")
+        # Create self-contained fixture with City Store (72,400 rev, 105 units) and Mall Store (600 rev, 5 units)
+        sales_df = pd.DataFrame([
+            {
+                "sale_id": "S001", "date": "2026-08-01",
+                "store_id": "S001", "store_name": "City Store",
+                "product_id": "P001", "product_name": "Fast Selling Phone",
+                "quantity": 100, "unit_price": 700.0, "total_revenue": 70000.0,
+            },
+            {
+                "sale_id": "S002", "date": "2026-08-02",
+                "store_id": "S001", "store_name": "City Store",
+                "product_id": "P002", "product_name": "Slow Selling TV",
+                "quantity": 5, "unit_price": 480.0, "total_revenue": 2400.0,
+            },
+            {
+                "sale_id": "S003", "date": "2026-08-03",
+                "store_id": "S002", "store_name": "Mall Store",
+                "product_id": "P001", "product_name": "Fast Selling Phone",
+                "quantity": 5, "unit_price": 120.0, "total_revenue": 600.0,
+            },
+        ])
+        inv_df = pd.DataFrame([
+            {"store_id": "S001", "product_id": "P001", "current_stock": 50, "last_restock_date": "2026-08-01"},
+            {"store_id": "S001", "product_id": "P002", "current_stock": 100, "last_restock_date": "2026-08-01"},
+            {"store_id": "S002", "product_id": "P001", "current_stock": 20, "last_restock_date": "2026-08-01"},
+            {"store_id": "S002", "product_id": "P002", "current_stock": 30, "last_restock_date": "2026-08-01"},
+        ])
+        create_and_activate_dataset("Sales", sales_df, inv_df)
+
+    @classmethod
+    def tearDownClass(cls):
+        ActiveDatasetManager.clear_active_dataset()
 
     def run_query_and_print_trace(self, question: str, expected_intent: str):
         processed = process_query_intent(question)

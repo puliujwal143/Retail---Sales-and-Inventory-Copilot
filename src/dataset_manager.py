@@ -61,7 +61,7 @@ class ActiveDatasetManager:
         return empty_path
 
     def _init_storage(self):
-        """Initializes datasets storage directory and metadata file with automatic deduplication."""
+        """Initializes datasets storage directory and metadata file."""
         os.makedirs(DATASETS_DIR, exist_ok=True)
         self._ensure_empty_db()
 
@@ -76,54 +76,43 @@ class ActiveDatasetManager:
         else:
             self._metadata = {"active_dataset_id": None, "datasets": {}}
 
-        # Deduplicate existing datasets in metadata
-        self._deduplicate_datasets()
+        # Sync metadata and disk: remove broken references only
+        self._purge_orphans_on_startup()
         self._save_metadata()
 
-    def _deduplicate_datasets(self):
+    def _purge_orphans_on_startup(self):
         """
-        Deduplicates datasets that have identical name, store count, product count, and sales count.
-        Always preserves 'demo' and the currently active dataset.
+        Syncs metadata and disk on startup for Single Active Dataset model:
+        - Keeps demo dataset metadata and file.
+        - If an active custom dataset is set and its file exists, keeps it.
+        - Removes any non-active custom datasets from metadata and disk so active storage contains only 1 active dataset.
+        - If active dataset file is missing, resets to NO_DATA.
         """
         raw_datasets = self._metadata.get("datasets", {})
-        if not raw_datasets:
-            return
-
-        active_id = self._active_dataset_id
-        seen_fingerprints = {}
         cleaned_datasets = {}
-
-        # First pass: preserve demo and active dataset unconditionally
-        if "demo" in raw_datasets:
-            cleaned_datasets["demo"] = raw_datasets["demo"]
-            d = raw_datasets["demo"]
-            fp = (d.get("dataset_name"), d.get("store_count"), d.get("product_count"), d.get("sales_count"))
-            seen_fingerprints[fp] = "demo"
-
-        if active_id and active_id != "demo" and active_id in raw_datasets:
-            cleaned_datasets[active_id] = raw_datasets[active_id]
-            d = raw_datasets[active_id]
-            fp = (d.get("dataset_name"), d.get("store_count"), d.get("product_count"), d.get("sales_count"))
-            seen_fingerprints[fp] = active_id
-
-        # Second pass: for other datasets, keep only one per fingerprint
         for ds_id, ds in raw_datasets.items():
-            if ds_id in cleaned_datasets:
+            if ds_id == "demo":
+                cleaned_datasets[ds_id] = ds
                 continue
-            # Check if sqlite file exists on disk
             sqlite_file = os.path.join(DATASETS_DIR, f"{ds_id}.sqlite")
-            if not os.path.exists(sqlite_file) and ds_id != "demo":
-                continue
-            
-            fp = (ds.get("dataset_name"), ds.get("store_count"), ds.get("product_count"), ds.get("sales_count"))
-            if fp not in seen_fingerprints:
-                seen_fingerprints[fp] = ds_id
+            if os.path.exists(sqlite_file):
                 cleaned_datasets[ds_id] = ds
             else:
-                # Remove duplicate sqlite file if not active
-                if ds_id != active_id and os.path.exists(sqlite_file):
+                print(f"[RetailIQ] Purging orphaned metadata entry '{ds_id}' (file missing).")
+                if ds_id == self._active_dataset_id:
+                    print(f"[RetailIQ] Active dataset '{ds_id}' file missing — resetting to NO_DATA.")
+                    self._active_dataset_id = None
+
+        # Clean up stray unreferenced sqlite files
+        registered_files = {f"{ds_id}.sqlite" for ds_id in cleaned_datasets.keys()}
+        registered_files.add("demo.sqlite")
+        registered_files.add("empty.sqlite")
+
+        if os.path.exists(DATASETS_DIR):
+            for fname in os.listdir(DATASETS_DIR):
+                if fname.endswith(".sqlite") and fname not in registered_files and not fname.startswith("staging_"):
                     try:
-                        os.remove(sqlite_file)
+                        os.remove(os.path.join(DATASETS_DIR, fname))
                     except Exception:
                         pass
 
@@ -313,6 +302,56 @@ class ActiveDatasetManager:
         return cls.activate_dataset("demo")
 
     @classmethod
+    def delete_dataset(cls, dataset_id: str) -> None:
+        """
+        Permanently deletes a dataset: removes its SQLite file and metadata entry.
+
+        Rules:
+        - 'demo' cannot be deleted.
+        - If the deleted dataset is currently active, the state transitions to NO_DATA.
+          It does NOT automatically fall back to demo or any other dataset.
+        - Raises ValueError for invalid or protected dataset IDs.
+        """
+        if not dataset_id or dataset_id == "demo":
+            raise ValueError("The demo dataset cannot be deleted.")
+
+        inst = cls.get_instance()
+        datasets = inst._metadata.get("datasets", {})
+
+        if dataset_id not in datasets:
+            # Still check if a stray file exists and clean it up
+            stray_file = os.path.join(DATASETS_DIR, f"{dataset_id}.sqlite")
+            if os.path.exists(stray_file):
+                try:
+                    os.remove(stray_file)
+                except Exception as e:
+                    print(f"[RetailIQ] Warning: could not remove stray file {stray_file}: {e}")
+            raise ValueError(f"Dataset '{dataset_id}' not found in registry.")
+
+        # If this is the currently active dataset, reset to NO_DATA first
+        was_active = (inst._active_dataset_id == dataset_id)
+        if was_active:
+            inst._active_dataset_id = None
+            print(f"[RetailIQ] Active dataset '{dataset_id}' is being deleted — transitioning to NO_DATA.")
+
+        # Remove the SQLite file
+        sqlite_file = os.path.join(DATASETS_DIR, f"{dataset_id}.sqlite")
+        if os.path.exists(sqlite_file):
+            try:
+                os.remove(sqlite_file)
+                print(f"[RetailIQ] Deleted dataset file: {sqlite_file}")
+            except Exception as e:
+                raise RuntimeError(f"Failed to delete dataset file '{sqlite_file}': {e}")
+
+        # Remove metadata entry
+        del inst._metadata["datasets"][dataset_id]
+        inst._save_metadata()
+
+        # Invalidate caches and frontend state
+        _trigger_invalidation()
+        print(f"[RetailIQ] Dataset '{dataset_id}' deleted successfully.")
+
+    @classmethod
     def register_demo_dataset(cls, db_path: str):
         """Initializes or registers the default demo dataset without auto-activating it."""
         inst = cls.get_instance()
@@ -390,6 +429,10 @@ def get_active_dataset_metadata() -> Dict[str, Any]:
 
 def get_active_dataset_latest_date() -> str:
     return ActiveDatasetManager.get_active_dataset_latest_date()
+
+def delete_dataset(dataset_id: str) -> None:
+    """Module-level convenience wrapper for ActiveDatasetManager.delete_dataset()."""
+    ActiveDatasetManager.delete_dataset(dataset_id)
 
 
 
@@ -867,16 +910,20 @@ def create_and_activate_dataset(
     stores_df: Optional[pd.DataFrame] = None
 ) -> Dict[str, Any]:
     """
-    ATOMIC DATASET PIPELINE:
+    SINGLE ACTIVE DATASET REPLACEMENT PIPELINE:
     1. Validates inputs and normalizes data.
-    2. Builds isolated staging SQLite database (datasets/<id>.sqlite.tmp).
-    3. Indexes tables and runs integrity verification.
-    4. Upon 100% verification, atomically promotes staging db to active dataset.
-    5. Invalidates all caches and refreshes metadata.
-    If validation fails: clean rollback, previous active dataset stays 100% intact.
+    2. Builds isolated staging SQLite database: data/datasets/staging_<uuid>.sqlite.
+    3. Indexes tables and runs integrity verification (row counts, referential integrity, date ranges, metrics sanity).
+    4. ONLY AFTER 100% SUCCESS:
+       a. Removes old active dataset (and any older custom datasets) from disk and metadata.
+       b. Atomically promotes staging DB to datasets/<id>.sqlite.
+       c. Sets active_dataset_id to new dataset.
+       d. Invalidates all caches and clears Copilot conversation memory.
+    If validation/verification fails: clean rollback, staging DB deleted, previous active dataset stays 100% intact.
     """
+    inst = ActiveDatasetManager.get_instance()
     dataset_id = "ds_" + uuid.uuid4().hex[:8]
-    staging_file = os.path.join(DATASETS_DIR, f"{dataset_id}.sqlite.tmp")
+    staging_file = os.path.join(DATASETS_DIR, f"staging_{dataset_id}.sqlite")
     final_file = os.path.join(DATASETS_DIR, f"{dataset_id}.sqlite")
 
     try:
@@ -910,7 +957,7 @@ def create_and_activate_dataset(
         c.execute("CREATE INDEX idx_movements_store ON inventory_movements(store_id)")
         c.execute("CREATE INDEX idx_movements_prod ON inventory_movements(product_id)")
 
-        # Step 4: Verification Sanity Checks
+        # Step 4: Comprehensive Verification Sanity Checks
         c.execute("SELECT COUNT(*) as cnt FROM sales")
         s_cnt = c.fetchone()[0]
         c.execute("SELECT COUNT(*) as cnt FROM products")
@@ -920,29 +967,99 @@ def create_and_activate_dataset(
         c.execute("SELECT COUNT(*) as cnt FROM inventory")
         i_cnt = c.fetchone()[0]
 
+        if s_cnt == 0 or p_cnt == 0 or st_cnt == 0 or i_cnt == 0:
+            conn.close()
+            raise ValueError(f"Integrity check failed: sales={s_cnt}, products={p_cnt}, stores={st_cnt}, inventory={i_cnt}")
+
+        # Referential integrity check
+        c.execute("SELECT COUNT(*) FROM sales WHERE product_id NOT IN (SELECT product_id FROM products)")
+        orphan_sales_p = c.fetchone()[0]
+        c.execute("SELECT COUNT(*) FROM sales WHERE store_id NOT IN (SELECT store_id FROM stores)")
+        orphan_sales_s = c.fetchone()[0]
+        c.execute("SELECT COUNT(*) FROM inventory WHERE product_id NOT IN (SELECT product_id FROM products)")
+        orphan_inv_p = c.fetchone()[0]
+        c.execute("SELECT COUNT(*) FROM inventory WHERE store_id NOT IN (SELECT store_id FROM stores)")
+        orphan_inv_s = c.fetchone()[0]
+
+        if orphan_sales_p > 0 or orphan_sales_s > 0 or orphan_inv_p > 0 or orphan_inv_s > 0:
+            conn.close()
+            raise ValueError(
+                f"Referential integrity failure: orphan_sales_p={orphan_sales_p}, orphan_sales_s={orphan_sales_s}, "
+                f"orphan_inv_p={orphan_inv_p}, orphan_inv_s={orphan_inv_s}"
+            )
+
+        # Date validation check
+        c.execute("SELECT MIN(date), MAX(date) FROM sales")
+        min_d, max_d = c.fetchone()
+        if not min_d or not max_d:
+            conn.close()
+            raise ValueError("Invalid date range detected in sales records.")
+
+        # Metric sanity checks
+        c.execute("SELECT COALESCE(SUM(total_revenue), 0), COALESCE(SUM(quantity), 0) FROM sales")
+        tot_rev, tot_qty = c.fetchone()
+        c.execute("SELECT COALESCE(SUM(current_stock), 0) FROM inventory")
+        tot_stock = c.fetchone()[0]
+
         conn.commit()
         conn.close()
 
-        if s_cnt == 0 or p_cnt == 0 or st_cnt == 0 or i_cnt == 0:
-            raise ValueError(f"Integrity check failed: sales={s_cnt}, products={p_cnt}, stores={st_cnt}, inventory={i_cnt}")
+        metrics = {
+            "dataset_id": dataset_id,
+            "dataset_name": dataset_name or f"Custom Dataset ({dataset_id[:8]})",
+            "is_demo": False,
+            "store_count": int(st_cnt),
+            "product_count": int(p_cnt),
+            "sales_count": int(s_cnt),
+            "inventory_count": int(i_cnt),
+            "total_stock_units": int(tot_stock),
+            "min_date": str(min_d),
+            "max_date": str(max_d),
+            "total_revenue": round(float(tot_rev), 2),
+            "total_units_sold": int(tot_qty),
+            "created_at": datetime.datetime.now().isoformat()
+        }
 
-        # Step 5: Atomic Promotion
+        # Step 5: Update Manager Metadata & Set Active
+        inst._metadata.setdefault("datasets", {})[dataset_id] = metrics
+        inst._active_dataset_id = dataset_id
+
+        # Step 6: Atomic Promotion
         if os.path.exists(final_file):
             os.remove(final_file)
         os.rename(staging_file, final_file)
 
-        # Step 6: Update Manager Metadata & Activate
-        inst = ActiveDatasetManager.get_instance()
-        metrics = inst._compute_dataset_metrics(dataset_id, final_file, is_demo=False, dataset_name=dataset_name)
-        if not metrics:
-            raise RuntimeError("Failed to compute metrics for validated dataset.")
+        # Step 7: REMOVE OLD ACTIVE DATASET (and all older custom datasets)
+        # ONLY executed after 100% successful validation, verification, and promotion.
+        old_datasets = list(inst._metadata.get("datasets", {}).keys())
+        for old_id in old_datasets:
+            if old_id != "demo" and old_id != dataset_id:
+                old_file = os.path.join(DATASETS_DIR, f"{old_id}.sqlite")
+                if os.path.exists(old_file):
+                    try:
+                        os.remove(old_file)
+                        print(f"[RetailIQ] Removed old dataset file: {old_file}")
+                    except Exception as e:
+                        print(f"[RetailIQ] Warning: failed to remove old dataset file {old_file}: {e}")
+                if old_id in inst._metadata.get("datasets", {}):
+                    del inst._metadata["datasets"][old_id]
 
-        inst._metadata.setdefault("datasets", {})[dataset_id] = metrics
-        inst._active_dataset_id = dataset_id
+        # Also purge any stray non-demo .sqlite files in DATASETS_DIR
+        for fname in os.listdir(DATASETS_DIR):
+            if fname.endswith(".sqlite") and fname not in ["demo.sqlite", "empty.sqlite", f"{dataset_id}.sqlite"]:
+                stray_path = os.path.join(DATASETS_DIR, fname)
+                try:
+                    os.remove(stray_path)
+                    print(f"[RetailIQ] Purged stray old database: {stray_path}")
+                except Exception as e:
+                    print(f"[RetailIQ] Warning: could not remove {stray_path}: {e}")
+
         inst._save_metadata()
+
+        # Step 8: Clear All Caches and Reset Copilot Context
         _trigger_invalidation()
 
-        print(f"[RetailIQ] Dataset '{dataset_name}' ({dataset_id}) atomically loaded and activated successfully.")
+        print(f"[RetailIQ] Dataset '{dataset_name}' ({dataset_id}) promoted to SINGLE ACTIVE DATASET successfully.")
         return metrics
 
     except Exception as e:
@@ -952,5 +1069,5 @@ def create_and_activate_dataset(
                 os.remove(staging_file)
             except Exception:
                 pass
-        print(f"[RetailIQ] Dataset upload failed during validation: {e}. Rollback completed.")
+        print(f"[RetailIQ] Dataset upload failed during validation: {e}. Staging rollback completed. Previous active dataset remains active.")
         raise

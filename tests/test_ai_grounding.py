@@ -16,23 +16,52 @@ def safe_print(msg: str):
     except UnicodeEncodeError:
         print(msg.encode('ascii', 'ignore').decode('ascii'))
 
+import pandas as pd
+from src.dataset_manager import create_and_activate_dataset
+
 class TestAIGroundingPipeline(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # Ensure database is initialized
-        init_db(force=False)
-        if ActiveDatasetManager.get_active_dataset_id() is None:
-            sales_datasets = [d for d in ActiveDatasetManager.list_datasets() if d.get("dataset_name") == "Sales"]
-            if sales_datasets:
-                ActiveDatasetManager.activate_dataset(sales_datasets[0]["dataset_id"])
-            else:
-                ActiveDatasetManager.activate_dataset("demo")
+        # Create explicit fixture dataset with Fast Selling Phone and City Store
+        sales_df = pd.DataFrame([
+            {
+                "sale_id": "S001",
+                "date": "2026-08-05",
+                "store_id": "S1",
+                "store_name": "City Store",
+                "product_id": "P1",
+                "product_name": "Fast Selling Phone",
+                "quantity": 12,
+                "unit_price": 5000.0,
+                "total_revenue": 60000.0,
+            },
+            {
+                "sale_id": "S002",
+                "date": "2026-08-10",
+                "store_id": "S1",
+                "store_name": "City Store",
+                "product_id": "P2",
+                "product_name": "Slow Selling TV",
+                "quantity": 1,
+                "unit_price": 13000.0,
+                "total_revenue": 13000.0,
+            }
+        ])
+        inv_df = pd.DataFrame([
+            {"store_id": "S1", "product_id": "P1", "current_stock": 50, "last_restock_date": "2026-08-01"},
+            {"store_id": "S1", "product_id": "P2", "current_stock": 10, "last_restock_date": "2026-08-01"},
+        ])
+        cls.metrics = create_and_activate_dataset("AIGroundingFixture", sales_df, inv_df)
         cls.active_ds = ActiveDatasetManager.get_active_dataset()
         safe_print(f"\n[SETUP] Active Dataset: {cls.active_ds.get('dataset_name')} (ID: {cls.active_ds.get('dataset_id')})")
         products = query_all("SELECT product_id, product_name FROM products")
         stores = query_all("SELECT store_id, store_name FROM stores")
         safe_print(f"[SETUP] Available Products: {[p['product_name'] for p in products]}")
         safe_print(f"[SETUP] Available Stores: {[s['store_name'] for s in stores]}")
+
+    @classmethod
+    def tearDownClass(cls):
+        ActiveDatasetManager.clear_active_dataset()
 
     def test_1_nonexistent_product(self):
         """Test 1: 'How did laptop sales perform?' -> NO_DATA if Laptop doesn't exist."""

@@ -56,45 +56,63 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // =========================================================================
-    // ACTIVE DATASET MANAGEMENT & DYNAMIC STATE SYNC
+    // UTILITY FUNCTIONS
     // =========================================================================
 
-    async function onDatasetChanged() {
-        // Reset state filters & selections
-        state.selectedStore = "all";
-        state.selectedCategory = "all";
-        state.selectedPriority = "all";
-        state.selectedDate = null;
-        state.storesData = [];
-        state.productsData = [];
-        state.inventoryData = [];
-
-        // Clear copilot chat history & messages
-        const chatContainer = document.getElementById("copilot-messages");
-        if (chatContainer) {
-            chatContainer.innerHTML = "";
-            appendCopilotMessage("system", "Active dataset state updated. All views, caches, and AI context have been refreshed.");
-        }
-
-        // Reset global inputs
-        if (globalStoreSelect) globalStoreSelect.value = "all";
-        const dateInput = document.getElementById("snapshot-date-input");
-        if (dateInput) dateInput.value = "";
-        const dateBanner = document.getElementById("snapshot-banner");
-        if (dateBanner) dateBanner.classList.add("hidden");
-
-        // Reload active dataset header, store dropdowns, catalogue, and all views
-        await loadActiveDatasetHeader();
-        await loadStores();
-        await loadAllViews();
+    /** Safely escapes user-controlled strings before injecting into innerHTML. */
+    function escapeHTML(str) {
+        const d = document.createElement('div');
+        d.appendChild(document.createTextNode(String(str ?? '')));
+        return d.innerHTML;
     }
+
+    /**
+     * Shows a brief floating toast notification.
+     * @param {string} message - Text to display
+     * @param {'success'|'error'|'info'} type - Visual style
+     */
+    function showToast(message, type = 'success') {
+        const existing = document.getElementById('retailiq-toast');
+        if (existing) existing.remove();
+
+        const toast = document.createElement('div');
+        toast.id = 'retailiq-toast';
+        const colors = {
+            success: { bg: '#166534', border: '#15803d', icon: '✓' },
+            error:   { bg: '#991b1b', border: '#b91c1c', icon: '✕' },
+            info:    { bg: '#1e3a5f', border: '#2563eb', icon: 'ℹ' }
+        };
+        const c = colors[type] || colors.success;
+        toast.style.cssText = [
+            'position:fixed', 'bottom:28px', 'right:28px', 'z-index:99999',
+            'display:flex', 'align-items:center', 'gap:10px',
+            'background:' + c.bg, 'border:1.5px solid ' + c.border,
+            'color:#fff', 'font-size:13px', 'font-weight:600',
+            'padding:12px 20px', 'border-radius:10px',
+            'box-shadow:0 8px 32px rgba(0,0,0,0.45)',
+            'opacity:0', 'transition:opacity 0.25s ease',
+            'max-width:380px'
+        ].join(';');
+        toast.innerHTML = '<span style="font-size:16px;">' + c.icon + '</span><span>' + escapeHTML(message) + '</span>';
+        document.body.appendChild(toast);
+
+        requestAnimationFrame(() => { toast.style.opacity = '1'; });
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    // =========================================================================
+    // ACTIVE DATASET MANAGEMENT & DYNAMIC STATE SYNC
+    // =========================================================================
 
     async function loadActiveDatasetHeader() {
         try {
             const res = await fetch("/api/datasets/active");
             if (!res.ok) return;
             const active = await res.json();
-            
+
             const pillName = document.getElementById("pill-dataset-name");
             const pillStats = document.getElementById("pill-dataset-stats");
             const pillBadge = document.getElementById("pill-dataset-badge");
@@ -133,7 +151,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // Populate globalStoreSelect
             if (globalStoreSelect) {
                 const cur = state.selectedStore;
-                globalStoreSelect.innerHTML = `<option value="all">All Stores (${stores.length})</option>` + 
+                globalStoreSelect.innerHTML = `<option value="all">All Stores (${stores.length})</option>` +
                     stores.map(s => `<option value="${s.store_id}">${s.store_name}</option>`).join("");
                 if (stores.some(s => s.store_id === cur)) {
                     globalStoreSelect.value = cur;
@@ -146,7 +164,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // Populate sales-store-select
             const salesStoreSelect = document.getElementById("sales-store-select");
             if (salesStoreSelect) {
-                salesStoreSelect.innerHTML = `<option value="all">All Stores (${stores.length})</option>` + 
+                salesStoreSelect.innerHTML = `<option value="all">All Stores (${stores.length})</option>` +
                     stores.map(s => `<option value="${s.store_id}">${s.store_name}</option>`).join("");
                 salesStoreSelect.value = state.selectedStore;
             }
@@ -199,7 +217,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (navTrigger) navTrigger.addEventListener("click", openModal);
         if (closeBtn) closeBtn.addEventListener("click", closeModal);
         if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
-        
+
         if (modal) {
             modal.addEventListener("click", (e) => {
                 if (e.target === modal) closeModal();
@@ -236,12 +254,21 @@ document.addEventListener("DOMContentLoaded", () => {
         // Upload mode radio toggle
         uploadModeRadios.forEach(radio => {
             radio.addEventListener("change", (e) => {
+                if (errorAlert) errorAlert.classList.add("hidden");
                 if (e.target.value === "single") {
                     if (singleZone) singleZone.classList.remove("hidden");
                     if (multiZone) multiZone.classList.add("hidden");
+                    // Clear 4 CSV files
+                    ["multi-sales-file", "multi-inv-file", "multi-prods-file", "multi-stores-file"].forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.value = "";
+                    });
                 } else {
                     if (singleZone) singleZone.classList.add("hidden");
                     if (multiZone) multiZone.classList.remove("hidden");
+                    // Clear single file
+                    if (singleFileInput) singleFileInput.value = "";
+                    if (singleFileChosen) singleFileChosen.textContent = "No file chosen";
                 }
             });
         });
@@ -295,9 +322,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 e.preventDefault();
                 if (errorAlert) errorAlert.classList.add("hidden");
 
-                const mode = document.querySelector("input[name='upload-mode']:checked")?.value || "single";
-                const datasetName = document.getElementById("upload-dataset-name")?.value || "";
+                const datasetName = (document.getElementById("upload-dataset-name")?.value || "").trim();
+                if (!datasetName) {
+                    if (errorAlert) {
+                        errorAlert.textContent = "Dataset name is required.";
+                        errorAlert.classList.remove("hidden");
+                    }
+                    return;
+                }
 
+                const mode = document.querySelector("input[name='upload-mode']:checked")?.value || "single";
                 const formData = new FormData();
                 formData.append("dataset_name", datasetName);
 
@@ -305,7 +339,15 @@ document.addEventListener("DOMContentLoaded", () => {
                     const f = singleFileInput?.files?.[0];
                     if (!f) {
                         if (errorAlert) {
-                            errorAlert.textContent = "Please select a CSV or Excel file to upload.";
+                            errorAlert.textContent = "Please select a CSV or Excel file.";
+                            errorAlert.classList.remove("hidden");
+                        }
+                        return;
+                    }
+                    const fname = f.name.toLowerCase();
+                    if (!fname.endsWith(".csv") && !fname.endsWith(".xlsx") && !fname.endsWith(".xls")) {
+                        if (errorAlert) {
+                            errorAlert.textContent = "Invalid file type. Please upload a CSV or supported Excel file.";
                             errorAlert.classList.remove("hidden");
                         }
                         return;
@@ -319,15 +361,47 @@ document.addEventListener("DOMContentLoaded", () => {
 
                     if (!salesF) {
                         if (errorAlert) {
-                            errorAlert.textContent = "Sales transactions CSV is required.";
+                            errorAlert.textContent = "Sales CSV is required.";
                             errorAlert.classList.remove("hidden");
                         }
                         return;
                     }
+                    if (!invF) {
+                        if (errorAlert) {
+                            errorAlert.textContent = "Inventory CSV is required.";
+                            errorAlert.classList.remove("hidden");
+                        }
+                        return;
+                    }
+                    if (!prodsF) {
+                        if (errorAlert) {
+                            errorAlert.textContent = "Products CSV is required.";
+                            errorAlert.classList.remove("hidden");
+                        }
+                        return;
+                    }
+                    if (!storesF) {
+                        if (errorAlert) {
+                            errorAlert.textContent = "Stores CSV is required.";
+                            errorAlert.classList.remove("hidden");
+                        }
+                        return;
+                    }
+
+                    for (const f of [salesF, invF, prodsF, storesF]) {
+                        if (!f.name.toLowerCase().endsWith(".csv")) {
+                            if (errorAlert) {
+                                errorAlert.textContent = "Invalid file type. Please upload a CSV or supported Excel file.";
+                                errorAlert.classList.remove("hidden");
+                            }
+                            return;
+                        }
+                    }
+
                     formData.append("sales_file", salesF);
-                    if (invF) formData.append("inventory_file", invF);
-                    if (prodsF) formData.append("products_file", prodsF);
-                    if (storesF) formData.append("stores_file", storesF);
+                    formData.append("inventory_file", invF);
+                    formData.append("products_file", prodsF);
+                    formData.append("stores_file", storesF);
                 }
 
                 // Show Multi-Step Loading Progress Bar (Requirement 35)
@@ -360,8 +434,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     setStep(100, "Ready ✓ Dataset activated successfully!");
                     await new Promise(r => setTimeout(r, 400));
 
+                    showToast(`✓ Dataset "${data.dataset?.dataset_name || "Custom Dataset"}" activated successfully!`, 'success');
                     await onDatasetChanged();
                     closeModal();
+
                 } catch (err) {
                     if (progressBox) progressBox.classList.add("hidden");
                     if (errorAlert) {
@@ -399,27 +475,32 @@ document.addEventListener("DOMContentLoaded", () => {
                     <div class="dataset-card ${isActive ? 'active-ds' : ''}">
                         <div class="dataset-card-left">
                             <div class="dataset-card-header">
-                                <span class="dataset-card-title">${ds.dataset_name}</span>
+                                <span class="dataset-card-title">${escapeHTML(ds.dataset_name)}</span>
                                 ${isActive ? '<span class="badge badge-success">ACTIVE</span>' : (ds.is_demo ? '<span class="badge badge-secondary">DEMO</span>' : '<span class="badge badge-primary">CUSTOM</span>')}
                             </div>
                             <div class="dataset-card-metrics">
-                                <span>🏬 <strong>${ds.store_count}</strong> Stores</span>
-                                <span>📦 <strong>${ds.product_count}</strong> Products</span>
-                                <span>💳 <strong>${salesStr}</strong> Sales</span>
-                                <span>💰 <strong>${revStr}</strong> Rev</span>
-                                <span>📅 ${ds.min_date} → ${ds.max_date}</span>
+                                <span>🏬 <strong>${escapeHTML(ds.store_count)}</strong> Stores</span>
+                                <span>📦 <strong>${escapeHTML(ds.product_count)}</strong> Products</span>
+                                <span>💳 <strong>${escapeHTML(salesStr)}</strong> Sales</span>
+                                <span>💰 <strong>${escapeHTML(revStr)}</strong> Rev</span>
+                                <span>📅 ${escapeHTML(ds.min_date)} → ${escapeHTML(ds.max_date)}</span>
                             </div>
                         </div>
-                        <div>
+                        <div style="display:flex;gap:6px;align-items:center;">
                             ${isActive ? `
                                 <button class="btn-secondary" disabled style="opacity:0.6; cursor:default; font-size:12px; padding:6px 14px;">
                                     ✓ Current Active
                                 </button>
                             ` : `
-                                <button class="btn-primary btn-activate-ds" data-id="${ds.dataset_id}" style="font-size:12px; padding:6px 14px;">
+                                <button class="btn-primary btn-activate-ds" data-id="${escapeHTML(ds.dataset_id)}" data-name="${escapeHTML(ds.dataset_name)}" style="font-size:12px; padding:6px 14px;">
                                     Activate Dataset
                                 </button>
                             `}
+                            ${!ds.is_demo ? `
+                                <button class="btn-danger btn-delete-ds" data-id="${escapeHTML(ds.dataset_id)}" data-name="${escapeHTML(ds.dataset_name)}" style="font-size:12px; padding:6px 12px; background:var(--danger,#dc2626); color:#fff; border:none; border-radius:6px; cursor:pointer;">
+                                    🗑 Delete
+                                </button>
+                            ` : ''}
                         </div>
                     </div>
                 `;
@@ -429,6 +510,8 @@ document.addEventListener("DOMContentLoaded", () => {
             container.querySelectorAll(".btn-activate-ds").forEach(btn => {
                 btn.addEventListener("click", async () => {
                     const dsId = btn.getAttribute("data-id");
+                    const dsName = btn.getAttribute("data-name");
+                    const originalText = btn.textContent;
                     btn.disabled = true;
                     btn.textContent = "Activating...";
                     try {
@@ -438,25 +521,54 @@ document.addEventListener("DOMContentLoaded", () => {
                             body: JSON.stringify({ dataset_id: dsId })
                         });
                         if (!res.ok) throw new Error("Failed to activate dataset");
+                        showToast(`✓ Switched to ${dsName}`, 'success');
                         await onDatasetChanged();
                         const modal = document.getElementById("dataset-manager-modal");
                         if (modal) modal.classList.add("hidden");
                     } catch (err) {
-                        alert("Error activating dataset: " + err.message);
+                        btn.disabled = false;
+                        btn.textContent = originalText;
+                        showToast("Error activating dataset: " + err.message, 'error');
+                    }
+                });
+            });
+
+            // Attach delete event listeners
+            container.querySelectorAll(".btn-delete-ds").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const dsId = btn.getAttribute("data-id");
+                    const dsName = btn.getAttribute("data-name");
+                    if (!confirm(`Delete "${dsName}"?\n\nThis will permanently remove the dataset and cannot be undone.`)) return;
+                    btn.disabled = true;
+                    btn.textContent = "Deleting...";
+                    try {
+                        const res = await fetch(`/api/datasets/${encodeURIComponent(dsId)}`, { method: "DELETE" });
+                        if (!res.ok) {
+                            const err = await res.json().catch(() => ({ detail: "Delete failed" }));
+                            throw new Error(err.detail || "Delete failed");
+                        }
+                        showToast(`Dataset "${dsName}" deleted.`, 'info');
+                        await onDatasetChanged();
+                        await loadDatasetsList();
+                    } catch (err) {
+                        btn.disabled = false;
+                        btn.textContent = "🗑 Delete";
+                        showToast("Error deleting dataset: " + err.message, 'error');
                     }
                 });
             });
 
         } catch (e) {
-            container.innerHTML = `<div style="color:var(--danger); padding:10px;">Error loading datasets: ${e.message}</div>`;
+            container.innerHTML = `<div style="color:var(--danger); padding:10px;">Error loading datasets: ${escapeHTML(e.message)}</div>`;
         }
     }
+
 
     async function onDatasetChanged() {
         // 1. Reset frontend filters and selections (Requirements 17 & 18)
         state.selectedStore = "all";
         state.selectedDate = null;
-        
+
         if (globalStoreSelect) globalStoreSelect.value = "all";
         if (globalDateSelect) globalDateSelect.value = "today";
         if (globalDatePicker) {
@@ -556,27 +668,32 @@ document.addEventListener("DOMContentLoaded", () => {
                                 <div class="dataset-card ${isActive ? 'active-card' : ''}" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
                                     <div>
                                         <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
-                                            <span style="font-size:13px; font-weight:700; color:var(--text-primary);">${ds.dataset_name}</span>
+                                            <span style="font-size:13px; font-weight:700; color:var(--text-primary);">${escapeHTML(ds.dataset_name)}</span>
                                             ${isActive ? '<span class="badge badge-success" style="font-size:9px; padding:2px 6px;">ACTIVE</span>' : (ds.is_demo ? '<span class="badge badge-secondary" style="font-size:9px; padding:2px 6px;">DEMO</span>' : '<span class="badge badge-primary" style="font-size:9px; padding:2px 6px;">CUSTOM</span>')}
                                         </div>
                                         <div style="font-size:11px; color:var(--text-muted); display:flex; gap:8px; flex-wrap:wrap;">
-                                            <span>🏬 ${ds.store_count} Stores</span>
-                                            <span>📦 ${ds.product_count} SKUs</span>
-                                            <span>💳 ${salesStr} Sales</span>
-                                            <span>💰 ${revStr}</span>
-                                            <span>📅 ${ds.min_date} → ${ds.max_date}</span>
+                                            <span>🏬 ${escapeHTML(ds.store_count)} Stores</span>
+                                            <span>📦 ${escapeHTML(ds.product_count)} SKUs</span>
+                                            <span>💳 ${escapeHTML(salesStr)} Sales</span>
+                                            <span>💰 ${escapeHTML(revStr)}</span>
+                                            <span>📅 ${escapeHTML(ds.min_date)} → ${escapeHTML(ds.max_date)}</span>
                                         </div>
                                     </div>
-                                    <div>
+                                    <div style="display:flex; gap:6px; align-items:center; flex-shrink:0;">
                                         ${isActive ? `
                                             <button class="btn-secondary" disabled style="opacity:0.6; cursor:default; font-size:11px; padding:4px 10px;">
                                                 ✓ Active
                                             </button>
                                         ` : `
-                                            <button class="btn-primary btn-dm-activate" data-id="${ds.dataset_id}" style="font-size:11px; padding:4px 10px;">
+                                            <button class="btn-primary btn-dm-activate" data-id="${escapeHTML(ds.dataset_id)}" data-name="${escapeHTML(ds.dataset_name)}" style="font-size:11px; padding:4px 10px;">
                                                 ${ds.is_demo ? 'Use Demo Dataset' : 'Activate'}
                                             </button>
                                         `}
+                                        ${!ds.is_demo ? `
+                                            <button class="btn-dm-delete" data-id="${escapeHTML(ds.dataset_id)}" data-name="${escapeHTML(ds.dataset_name)}" style="font-size:11px; padding:4px 10px; background:var(--danger,#dc2626); color:#fff; border:none; border-radius:6px; cursor:pointer;">
+                                                🗑
+                                            </button>
+                                        ` : ''}
                                     </div>
                                 </div>
                             `;
@@ -585,6 +702,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         container.querySelectorAll(".btn-dm-activate").forEach(btn => {
                             btn.addEventListener("click", async () => {
                                 const dsId = btn.getAttribute("data-id");
+                                const dsName = btn.getAttribute("data-name");
+                                const originalText = btn.textContent.trim();
                                 btn.disabled = true;
                                 btn.textContent = "Activating...";
                                 try {
@@ -594,9 +713,35 @@ document.addEventListener("DOMContentLoaded", () => {
                                         body: JSON.stringify({ dataset_id: dsId })
                                     });
                                     if (!res.ok) throw new Error("Failed to activate dataset");
+                                    showToast(`✓ Switched to ${dsName}`, 'success');
                                     await onDatasetChanged();
                                 } catch (err) {
-                                    alert("Error activating dataset: " + err.message);
+                                    btn.disabled = false;
+                                    btn.textContent = originalText;
+                                    showToast("Error activating dataset: " + err.message, 'error');
+                                }
+                            });
+                        });
+
+                        container.querySelectorAll(".btn-dm-delete").forEach(btn => {
+                            btn.addEventListener("click", async () => {
+                                const dsId = btn.getAttribute("data-id");
+                                const dsName = btn.getAttribute("data-name");
+                                if (!confirm(`Delete "${dsName}"?\n\nThis will permanently remove the dataset and cannot be undone.`)) return;
+                                btn.disabled = true;
+                                btn.textContent = "...";
+                                try {
+                                    const res = await fetch(`/api/datasets/${encodeURIComponent(dsId)}`, { method: "DELETE" });
+                                    if (!res.ok) {
+                                        const errData = await res.json().catch(() => ({ detail: "Delete failed" }));
+                                        throw new Error(errData.detail || "Delete failed");
+                                    }
+                                    showToast(`Dataset "${dsName}" deleted.`, 'info');
+                                    await onDatasetChanged();
+                                } catch (err) {
+                                    btn.disabled = false;
+                                    btn.textContent = "🗑";
+                                    showToast("Error deleting dataset: " + err.message, 'error');
                                 }
                             });
                         });
@@ -607,6 +752,7 @@ document.addEventListener("DOMContentLoaded", () => {
             console.error("Error loading data management view:", e);
         }
     }
+
 
     function setupDataManagementPage() {
         const resetBtn = document.getElementById("dm-btn-reset-demo");
@@ -660,12 +806,22 @@ document.addEventListener("DOMContentLoaded", () => {
         // Toggle Upload Mode
         modeRadios.forEach(radio => {
             radio.addEventListener("change", (e) => {
+                if (errorAlert) errorAlert.classList.add("hidden");
+                if (validationBox) validationBox.classList.add("hidden");
                 if (e.target.value === "single") {
                     if (singleZone) singleZone.classList.remove("hidden");
                     if (multiZone) multiZone.classList.add("hidden");
+                    // Clear 4 CSV files
+                    ["dm-multi-sales-file", "dm-multi-inv-file", "dm-multi-prods-file", "dm-multi-stores-file"].forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.value = "";
+                    });
                 } else {
                     if (singleZone) singleZone.classList.add("hidden");
                     if (multiZone) multiZone.classList.remove("hidden");
+                    // Clear single file
+                    if (singleInput) singleInput.value = "";
+                    if (singleFileName) singleFileName.textContent = "No file chosen";
                 }
             });
         });
@@ -713,14 +869,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Helper to collect form data
         function buildUploadFormData() {
+            const dsName = (nameInput?.value || "").trim();
+            if (!dsName) {
+                return { error: "Dataset name is required." };
+            }
+
             const mode = document.querySelector("input[name='dm-upload-mode']:checked")?.value || "single";
-            const dsName = nameInput?.value || "";
             const formData = new FormData();
             formData.append("dataset_name", dsName);
 
             if (mode === "single") {
                 const f = singleInput?.files?.[0];
-                if (!f) return { error: "Please select a CSV or Excel file to upload." };
+                if (!f) return { error: "Please select a CSV or Excel file." };
+                const fname = f.name.toLowerCase();
+                if (!fname.endsWith(".csv") && !fname.endsWith(".xlsx") && !fname.endsWith(".xls")) {
+                    return { error: "Invalid file type. Please upload a CSV or supported Excel file." };
+                }
                 formData.append("file", f);
             } else {
                 const salesF = document.getElementById("dm-multi-sales-file")?.files?.[0];
@@ -728,11 +892,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 const prodsF = document.getElementById("dm-multi-prods-file")?.files?.[0];
                 const storesF = document.getElementById("dm-multi-stores-file")?.files?.[0];
 
-                if (!salesF) return { error: "Sales transactions CSV is required." };
+                if (!salesF) return { error: "Sales CSV is required." };
+                if (!invF) return { error: "Inventory CSV is required." };
+                if (!prodsF) return { error: "Products CSV is required." };
+                if (!storesF) return { error: "Stores CSV is required." };
+
+                for (const f of [salesF, invF, prodsF, storesF]) {
+                    if (!f.name.toLowerCase().endsWith(".csv")) {
+                        return { error: "Invalid file type. Please upload a CSV or supported Excel file." };
+                    }
+                }
+
                 formData.append("sales_file", salesF);
-                if (invF) formData.append("inventory_file", invF);
-                if (prodsF) formData.append("products_file", prodsF);
-                if (storesF) formData.append("stores_file", storesF);
+                formData.append("inventory_file", invF);
+                formData.append("products_file", prodsF);
+                formData.append("stores_file", storesF);
             }
             return { formData };
         }
@@ -1079,7 +1253,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const res = await fetch(url);
             const data = await res.json();
-            
+
             // Out-of-range date check (only shown if a specific date was selected)
             let noDataBanner = document.getElementById("date-no-data-banner");
             if (data.no_data && state.selectedDate) {
@@ -1103,9 +1277,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const overstockEl = document.getElementById("kpi-overstock-count");
             const growthEl = document.getElementById("kpi-growth-rate");
 
-            if (revEl) revEl.textContent = `₹${(data.total_revenue || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+            if (revEl) revEl.textContent = `₹${(data.total_revenue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
             if (unitsEl) unitsEl.textContent = (data.total_units_sold || 0).toLocaleString();
-            
+
             const lowStockTotal = (data.critical_low_stock_count || 0) + (data.warning_low_stock_count || 0);
             if (alertsEl) alertsEl.textContent = lowStockTotal;
             if (overstockEl) overstockEl.textContent = data.overstock_count || 0;
@@ -1153,7 +1327,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (state.selectedDate) url += `&date=${state.selectedDate}`;
             const res = await fetch(url);
             const data = await res.json();
-            
+
             const subEl = document.getElementById("dashboard-chart-subtitle");
             const chartSpec = data.combined_trend || data.revenue_trend;
             if (subEl && chartSpec && chartSpec.subtitle) {
@@ -1207,7 +1381,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!container) return;
 
         const total = (data.total_inventory_records !== undefined && data.total_inventory_records !== null) ? data.total_inventory_records : (data.total_skus || (data.inventoryData ? data.inventoryData.length : 0));
-        
+
         if (total === 0) {
             container.innerHTML = `
                 <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; min-height:160px; color:var(--text-muted); text-align:center; padding:20px;">
@@ -1304,7 +1478,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <td><strong>#${idx + 1}</strong></td>
                 <td><strong>${p.product_name}</strong></td>
                 <td class="text-right"><strong>${p.units_sold}</strong></td>
-                <td class="text-right"><strong>₹${(p.revenue || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</strong></td>
+                <td class="text-right"><strong>₹${(p.revenue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></td>
                 <td class="text-right"><span class="badge badge-success">+18.5%</span></td>
             </tr>
         `).join("");
@@ -1333,7 +1507,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return `
                 <tr>
                     <td><strong>${s.store_name}</strong></td>
-                    <td class="text-right"><strong>₹${rev.toLocaleString('en-IN', {minimumFractionDigits: 2})}</strong></td>
+                    <td class="text-right"><strong>₹${rev.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></td>
                     <td class="text-right"><strong>${Math.round(rev / 150)}</strong></td>
                     <td class="text-right"><span class="badge ${targetPct > 0 ? 'badge-success' : 'badge-secondary'}">+${targetPct}%</span></td>
                 </tr>
@@ -1468,7 +1642,7 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("modal-stock-val").textContent = data.metrics.current_stock;
             document.getElementById("modal-ads-val").textContent = `${data.metrics.avg_daily_sales.toFixed(1)} / day`;
             document.getElementById("modal-days-val").textContent = `${data.metrics.days_remaining} days`;
-            document.getElementById("modal-revenue-val").textContent = `₹${data.metrics["30d_revenue"].toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+            document.getElementById("modal-revenue-val").textContent = `₹${data.metrics["30d_revenue"].toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 
             const reorderQty = data.metrics.recommended_reorder;
             if (reorderQty > 0) {
@@ -1528,9 +1702,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const salesDailyEl = document.getElementById("sales-kpi-daily-rev");
             const salesTopCatEl = document.getElementById("sales-kpi-top-cat");
 
-            if (salesRevEl) salesRevEl.textContent = `₹${revSum.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+            if (salesRevEl) salesRevEl.textContent = `₹${revSum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
             if (salesUnitsEl) salesUnitsEl.textContent = unitSum.toLocaleString();
-            if (salesDailyEl) salesDailyEl.textContent = `₹${dailyAvg.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+            if (salesDailyEl) salesDailyEl.textContent = `₹${dailyAvg.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
             if (salesTopCatEl) salesTopCatEl.textContent = data.category_chart?.labels?.[0] || "N/A";
 
             if (data.revenue_trend) renderSVGChart("chart-sales-revenue", data.revenue_trend);
@@ -1627,7 +1801,7 @@ document.addEventListener("DOMContentLoaded", () => {
             exportBtn.addEventListener("click", async () => {
                 const res = await fetch(`/api/reorder-plan?store_id=${state.selectedStore}`);
                 const data = await res.json();
-                
+
                 let csv = "Priority,Product,Store,Current Stock,Avg Daily Sales,Days Remaining,Target Coverage,Recommended Reorder\n";
                 data.forEach(r => {
                     csv += `"${r.reorder_priority}","${r.product_name}","${r.store_name}",${r.current_stock},${r.average_daily_sales.toFixed(1)},${r.days_remaining},7 days,${r.recommended_reorder}\n`;
@@ -1649,7 +1823,7 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             const prioritySel = document.getElementById("reorder-filter-priority");
             const categorySel = document.getElementById("reorder-filter-category");
-            
+
             const priorityVal = prioritySel ? prioritySel.value : "all";
             const categoryVal = categorySel ? categorySel.value : "all";
 
@@ -1785,9 +1959,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const tableRowsHTML = data.comparison_table.map(s => `
                 <tr>
                     <td><strong>${s.store_name}</strong><br><span style="font-size:10px; color:var(--text-muted);">${s.location}</span></td>
-                    <td class="text-right"><strong>₹${s.total_revenue.toLocaleString('en-IN', {minimumFractionDigits:2})}</strong></td>
+                    <td class="text-right"><strong>₹${s.total_revenue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></td>
                     <td class="text-right">${s.units_sold.toLocaleString()} units</td>
-                    <td class="text-right">₹${s.avg_daily_revenue.toLocaleString('en-IN', {minimumFractionDigits:2})}/day</td>
+                    <td class="text-right">₹${s.avg_daily_revenue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}/day</td>
                     <td><span class="badge badge-critical">${s.critical_items} Critical</span></td>
                     <td><span class="badge badge-info">${s.overstock_items} Overstock</span></td>
                 </tr>
@@ -1880,9 +2054,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
 
                 <div class="kpi-grid" style="margin-bottom:20px;">
-                    <div class="kpi-card"><div class="kpi-title">TOTAL REVENUE</div><div class="kpi-value">₹${(kpis.total_revenue || 0).toLocaleString('en-IN', {minimumFractionDigits:2})}</div></div>
+                    <div class="kpi-card"><div class="kpi-title">TOTAL REVENUE</div><div class="kpi-value">₹${(kpis.total_revenue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div></div>
                     <div class="kpi-card"><div class="kpi-title">UNITS SOLD</div><div class="kpi-value">${(kpis.total_units_sold || 0).toLocaleString()}</div></div>
-                    <div class="kpi-card"><div class="kpi-title">VALUATION</div><div class="kpi-value">₹${(kpis.total_inventory_valuation || 0).toLocaleString('en-IN', {minimumFractionDigits:2})}</div></div>
+                    <div class="kpi-card"><div class="kpi-title">VALUATION</div><div class="kpi-value">₹${(kpis.total_inventory_valuation || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div></div>
                     <div class="kpi-card highlight-critical"><div class="kpi-title">CRITICAL SKUs</div><div class="kpi-value">${kpis.critical_low_stock_count || 0}</div></div>
                 </div>
 
@@ -1986,7 +2160,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function renderSVGChart(containerId, chartSpec) {
         const container = document.getElementById(containerId);
         if (!container) return;
-        
+
         if (!chartSpec || !chartSpec.labels || chartSpec.labels.length === 0 || (chartSpec.datasets && chartSpec.datasets.every(d => !d.data || d.data.length === 0 || d.data.every(v => v === 0)))) {
             const titleMsg = chartSpec?.title || "No sales data available";
             const subMsg = chartSpec?.subtitle || "Upload a retail dataset to see revenue and sales trends.";
@@ -2218,7 +2392,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     const val = datasets[0]?.data?.[idx] || 0;
                     const isPart = isPartialFlags[idx];
                     const isRev = (datasets[0]?.label && datasets[0].label.toLowerCase().includes("revenue")) || (chartSpec.title && chartSpec.title.toLowerCase().includes("revenue"));
-                    
+
                     let tipHTML = `<div style="font-weight:700; color:#F8FAFC; margin-bottom:2px;">${labels[idx]}</div>`;
                     tipHTML += `<div style="color:#2DD4BF; font-weight:600;">${isRev ? formatChartCurrency(val, false) : formatChartNumber(val, false) + ' units'}</div>`;
                     if (isPart) {
@@ -2271,9 +2445,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 return `
                     <g class="chart-hbar" data-idx="${i}">
-                        <text x="15" y="${y + h/2 + 4}" fill="#334155" font-size="11" font-weight="600" text-anchor="start">${lbl.substring(0, 32)}</text>
+                        <text x="15" y="${y + h / 2 + 4}" fill="#334155" font-size="11" font-weight="600" text-anchor="start">${lbl.substring(0, 32)}</text>
                         <rect x="${labelWidth}" y="${y}" width="${barW}" height="${h}" fill="${color}" rx="3" />
-                        <text x="${labelWidth + barW + 8}" y="${y + h/2 + 4}" fill="#0F172A" font-size="11" font-weight="700" text-anchor="start">${valStr}</text>
+                        <text x="${labelWidth + barW + 8}" y="${y + h / 2 + 4}" fill="#0F172A" font-size="11" font-weight="700" text-anchor="start">${valStr}</text>
                     </g>
                 `;
             }).join("");
@@ -2373,7 +2547,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return `
                     <g class="chart-bar-group" data-idx="${i}" style="cursor:pointer;">
                         <rect x="${x}" y="${y}" width="${w}" height="${barHeight}" fill="${col}" rx="3" />
-                        <text x="${x + w/2}" y="${height - 10}" fill="${isPart ? '#D97706' : '#64748B'}" font-size="9" font-weight="${isPart ? '700' : '500'}" text-anchor="middle">${labels[i] ? String(labels[i]).substring(0, 8) : ''}</text>
+                        <text x="${x + w / 2}" y="${height - 10}" fill="${isPart ? '#D97706' : '#64748B'}" font-size="9" font-weight="${isPart ? '700' : '500'}" text-anchor="middle">${labels[i] ? String(labels[i]).substring(0, 8) : ''}</text>
                     </g>
                 `;
             }).join("");
@@ -2411,12 +2585,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // AI COPILOT CHAT QUERY FUNCTION
-    async function sendChatQuery(userQuery) {
-        const messagesContainer = document.getElementById("chat-messages-container");
-        const welcomeCard = document.getElementById("copilot-welcome-card");
-        const loadingCard = document.getElementById("ai-loading-indicator");
-
+    // Helper to escape HTML to prevent XSS
     function escapeHTML(str) {
         if (str === null || str === undefined) return "";
         return String(str)
@@ -2427,28 +2596,33 @@ document.addEventListener("DOMContentLoaded", () => {
             .replace(/'/g, "&#039;");
     }
 
+    // AI COPILOT CHAT QUERY FUNCTION
     async function sendChatQuery(userQuery) {
+        const messagesContainer = document.getElementById("chat-messages-container");
+        const welcomeCard = document.getElementById("copilot-welcome-card");
+        const loadingCard = document.getElementById("ai-loading-indicator");
+
         if (!messagesContainer) return;
         if (welcomeCard) welcomeCard.style.display = "none";
 
         // User Message - Safely escaped
-        const userMsgDiv = document.createElement("div");
-        userMsgDiv.className = "chat-message user-message";
-        userMsgDiv.textContent = userQuery;
-        messagesContainer.appendChild(userMsgDiv);
+            const userMsgDiv = document.createElement("div");
+            userMsgDiv.className = "chat-message user-message";
+            userMsgDiv.textContent = userQuery;
+            messagesContainer.appendChild(userMsgDiv);
 
-        if (loadingCard) {
-            loadingCard.classList.remove("hidden");
-            loadingCard.style.display = "flex";
-            const loadText = loadingCard.querySelector(".loading-text") || loadingCard.querySelector("span") || loadingCard;
-            if (loadText) loadText.textContent = "Analyzing retail database...";
-        }
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            if (loadingCard) {
+                loadingCard.classList.remove("hidden");
+                loadingCard.style.display = "flex";
+                const loadText = loadingCard.querySelector(".loading-text") || loadingCard.querySelector("span") || loadingCard;
+                if (loadText) loadText.textContent = "Analyzing retail database...";
+            }
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
-        // Assistant Message Placeholder
-        const assistantMsgDiv = document.createElement("div");
-        assistantMsgDiv.className = "chat-message assistant-message";
-        assistantMsgDiv.innerHTML = `
+            // Assistant Message Placeholder
+            const assistantMsgDiv = document.createElement("div");
+            assistantMsgDiv.className = "chat-message assistant-message";
+            assistantMsgDiv.innerHTML = `
             <div style="font-weight:700; color:var(--brand-teal); font-size:12px; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
                 ✨ RetailIQ Evidence Copilot
             </div>
@@ -2456,53 +2630,53 @@ document.addEventListener("DOMContentLoaded", () => {
                 Analyzing store sales & inventory data...
             </div>
         `;
-        messagesContainer.appendChild(assistantMsgDiv);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            messagesContainer.appendChild(assistantMsgDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
-        try {
-            if (loadingCard) {
-                const loadText = loadingCard.querySelector(".loading-text") || loadingCard.querySelector("span") || loadingCard;
-                if (loadText) loadText.textContent = "Preparing evidence...";
-            }
+            try {
+                if (loadingCard) {
+                    const loadText = loadingCard.querySelector(".loading-text") || loadingCard.querySelector("span") || loadingCard;
+                    if (loadText) loadText.textContent = "Preparing evidence...";
+                }
 
-            const res = await fetch("/api/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ question: userQuery, store_id: state.selectedStore, target_date: state.selectedDate })
-            });
+                const res = await fetch("/api/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ question: userQuery, store_id: state.selectedStore, target_date: state.selectedDate })
+                });
 
-            const data = await res.json();
-            renderCopilotResponse(assistantMsgDiv, data);
+                const data = await res.json();
+                renderCopilotResponse(assistantMsgDiv, data);
 
-        } catch (err) {
-            assistantMsgDiv.querySelector(".message-body").innerHTML = `
+            } catch (err) {
+                assistantMsgDiv.querySelector(".message-body").innerHTML = `
                 <div style="color: var(--status-critical);">Error executing AI query. Please check server logs.</div>
             `;
-        } finally {
-            if (loadingCard) {
-                loadingCard.classList.add("hidden");
-                loadingCard.style.display = "none";
+            } finally {
+                if (loadingCard) {
+                    loadingCard.classList.add("hidden");
+                    loadingCard.style.display = "none";
+                }
             }
-        }
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
-
-    // Render Grounded BI Executive Response in Chat
-    function renderCopilotResponse(msgElement, data) {
-        const sufficiencyBadge = data.data_sufficiency === "sufficient" ?
-            `<span class="badge badge-success">✔ Answered from Retail Data</span>` :
-            (data.data_sufficiency === "partial" ?
-                `<span class="badge badge-warning">⚠️ Partially Answered</span>` :
-                `<span class="badge badge-critical">❌ Not Answerable</span>`);
-
-        let scopeHTML = "";
-        if (data.data_scope) {
-            scopeHTML = `<div style="font-size:11px; font-weight:700; color:var(--brand-teal); background:#ECFDF5; border:1px solid #A7F3D0; padding:4px 8px; border-radius:4px; margin-bottom:8px; display:inline-block;">📊 ${escapeHTML(data.data_scope)}</div>`;
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
 
-        let metricsHTML = "";
-        if (data.key_metrics && data.key_metrics.length > 0) {
-            metricsHTML = `
+        // Render Grounded BI Executive Response in Chat
+        function renderCopilotResponse(msgElement, data) {
+            const sufficiencyBadge = data.data_sufficiency === "sufficient" ?
+                `<span class="badge badge-success">✔ Answered from Retail Data</span>` :
+                (data.data_sufficiency === "partial" ?
+                    `<span class="badge badge-warning">⚠️ Partially Answered</span>` :
+                    `<span class="badge badge-critical">❌ Not Answerable</span>`);
+
+            let scopeHTML = "";
+            if (data.data_scope) {
+                scopeHTML = `<div style="font-size:11px; font-weight:700; color:var(--brand-teal); background:#ECFDF5; border:1px solid #A7F3D0; padding:4px 8px; border-radius:4px; margin-bottom:8px; display:inline-block;">📊 ${escapeHTML(data.data_scope)}</div>`;
+            }
+
+            let metricsHTML = "";
+            if (data.key_metrics && data.key_metrics.length > 0) {
+                metricsHTML = `
                 <div style="display:flex; flex-wrap:wrap; gap:8px; margin: 10px 0;">
                     ${data.key_metrics.map(m => `
                         <div style="background:#FFFFFF; border:1px solid var(--border-color); padding:6px 12px; border-radius:6px; font-size:11px;">
@@ -2512,11 +2686,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     `).join("")}
                 </div>
             `;
-        }
+            }
 
-        let recsHTML = "";
-        if (data.recommendations && data.recommendations.length > 0) {
-            recsHTML = `
+            let recsHTML = "";
+            if (data.recommendations && data.recommendations.length > 0) {
+                recsHTML = `
                 <div style="background:var(--brand-teal-bg); border-left:3px solid var(--brand-teal); padding:10px 14px; border-radius:6px; font-size:12px; margin:10px 0; color:var(--text-secondary);">
                     <div style="color:var(--brand-teal); font-weight:700; font-size:11px; text-transform:uppercase;">💡 Action Plan:</div>
                     <ul style="padding-left:16px; margin-top:4px;">
@@ -2524,25 +2698,25 @@ document.addEventListener("DOMContentLoaded", () => {
                     </ul>
                 </div>
             `;
-        }
+            }
 
-        let chartContainerId = `chat-chart-${Date.now()}`;
-        let chartHTML = data.chart ? `
+            let chartContainerId = `chat-chart-${Date.now()}`;
+            let chartHTML = data.chart ? `
             <div style="background:#FFFFFF; border:1px solid var(--border-color); padding:14px; border-radius:8px; margin:12px 0;">
                 <div style="font-size:12px; font-weight:700; color:var(--text-primary); margin-bottom:8px;">${escapeHTML(data.chart.title)}</div>
                 <div id="${chartContainerId}" class="svg-chart-container" style="height:180px;"></div>
             </div>
         ` : "";
 
-        let evidenceHTML = "";
-        if (data.evidence && data.evidence.length > 0) {
-            evidenceHTML = `
+            let evidenceHTML = "";
+            if (data.evidence && data.evidence.length > 0) {
+                evidenceHTML = `
                 <details style="margin-top:10px; font-size:11px; color:var(--text-muted);">
                     <summary style="cursor:pointer; font-weight:600; color:var(--text-secondary);">🔍 Supporting Evidence (${data.evidence.length} items)</summary>
                     <div style="margin-top:8px; display:flex; flex-direction:column; gap:4px;">
                         ${data.evidence.map(e => {
-                            if (typeof e === 'string') return `<div style="background:#FFFFFF; border:1px solid var(--border-color); padding:4px 8px; border-radius:4px;">${escapeHTML(e)}</div>`;
-                            return `
+                    if (typeof e === 'string') return `<div style="background:#FFFFFF; border:1px solid var(--border-color); padding:4px 8px; border-radius:4px;">${escapeHTML(e)}</div>`;
+                    return `
                             <div style="background:#FFFFFF; border:1px solid var(--border-color); padding:6px 10px; border-radius:4px; display:flex; flex-wrap:wrap; gap:8px;">
                                 ${e.year ? `<div><strong>Year:</strong> ${escapeHTML(e.year)}</div>` : ''}
                                 ${e.product_name ? `<div><strong>Product:</strong> ${escapeHTML(e.product_name)}</div>` : ''}
@@ -2553,13 +2727,13 @@ document.addEventListener("DOMContentLoaded", () => {
                                 ${e.avg_daily_sales !== undefined && e.avg_daily_sales !== 0 ? `<div><strong>Avg Daily:</strong> ${escapeHTML(e.avg_daily_sales)}</div>` : ''}
                                 ${e.source ? `<div><strong>Source:</strong> ${escapeHTML(e.source)}</div>` : ''}
                             </div>`;
-                        }).join("")}
+                }).join("")}
                     </div>
                 </details>
             `;
-        }
+            }
 
-        msgElement.querySelector(".message-body").innerHTML = `
+            msgElement.querySelector(".message-body").innerHTML = `
             <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:6px;">
                 <div>${sufficiencyBadge}</div>
                 ${scopeHTML}
@@ -2573,10 +2747,10 @@ document.addEventListener("DOMContentLoaded", () => {
             ${evidenceHTML}
         `;
 
-        if (data.chart) {
-            setTimeout(() => {
-                renderSVGChart(chartContainerId, data.chart);
-            }, 60);
+            if (data.chart) {
+                setTimeout(() => {
+                    renderSVGChart(chartContainerId, data.chart);
+                }, 60);
+            }
         }
-    }
-});
+    });

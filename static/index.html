@@ -727,18 +727,19 @@
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px; align-items: center;">
                             <div>
                                 <label style="font-weight: 600; font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">
-                                    Dataset Name (Optional)
+                                    Dataset Name (Required) *
                                 </label>
-                                <input type="text" id="dm-input-name" placeholder="e.g., My Retail Store 2026" class="form-input" style="width: 100%; height: 34px;">
+                                <input type="text" id="dm-input-name" placeholder="e.g., My Retail Store 2026" class="form-input" style="width: 100%; height: 34px;" required>
                             </div>
                             <div>
                                 <label style="font-weight: 600; font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">
-                                    Upload Mode
+                                    Choose ONE Upload Method
                                 </label>
-                                <div style="display: flex; gap: 16px; align-items: center; height: 34px;">
+                                <div style="display: flex; gap: 12px; align-items: center; height: 34px;">
                                     <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
                                         <input type="radio" name="dm-upload-mode" value="single" checked> Single File (.csv / .xlsx)
                                     </label>
+                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); background: var(--bg-subtle, #F1F5F9); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border-color, #E2E8F0); margin: 0 4px;">OR</span>
                                     <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
                                         <input type="radio" name="dm-upload-mode" value="multi"> 4 Separate CSVs
                                     </label>
@@ -749,7 +750,7 @@
                         <!-- Single File Dropzone -->
                         <div id="dm-single-zone" class="upload-dropzone" style="margin-bottom: 12px; padding: 18px 14px; border: 2px dashed var(--brand-teal-border); border-radius: var(--radius-md); text-align: center; background: #FAFDFD;">
                             <div class="dropzone-icon" style="font-size: 24px; margin-bottom: 2px;">📁</div>
-                            <div class="dropzone-title" style="font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 2px;">Drag & drop your CSV or Excel (.xlsx) file here</div>
+                            <div class="dropzone-title" style="font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 2px;">Drag & drop your CSV or Excel (.xlsx) file here *</div>
                             <div class="dropzone-sub" style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">or click Choose File from your computer (Supports .csv, .xlsx, .xls)</div>
                             <input type="file" id="dm-single-file-input" accept=".csv, .xlsx, .xls" style="display: none;">
                             <button type="button" class="btn-secondary" onclick="document.getElementById('dm-single-file-input').click()" style="font-size: 12px; padding: 6px 18px; font-weight: 600;">
@@ -761,19 +762,19 @@
                         <!-- Multi-File Dropzone -->
                         <div id="dm-multi-zone" class="multi-upload-grid hidden" style="margin-bottom: 12px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
                             <div class="multi-drop-card" style="padding: 8px 10px;">
-                                <span class="file-label" style="font-size: 11px; font-weight: 600; margin-bottom: 4px;">1. Sales (Required)*</span>
+                                <span class="file-label" style="font-size: 11px; font-weight: 600; margin-bottom: 4px;">1. Sales (Required) *</span>
                                 <input type="file" id="dm-multi-sales-file" accept=".csv" class="form-input" style="height: 30px; font-size: 11px; padding: 2px 4px;">
                             </div>
                             <div class="multi-drop-card" style="padding: 8px 10px;">
-                                <span class="file-label" style="font-size: 11px; font-weight: 600; margin-bottom: 4px;">2. Inventory (Optional)</span>
+                                <span class="file-label" style="font-size: 11px; font-weight: 600; margin-bottom: 4px;">2. Inventory (Required) *</span>
                                 <input type="file" id="dm-multi-inv-file" accept=".csv" class="form-input" style="height: 30px; font-size: 11px; padding: 2px 4px;">
                             </div>
                             <div class="multi-drop-card" style="padding: 8px 10px;">
-                                <span class="file-label" style="font-size: 11px; font-weight: 600; margin-bottom: 4px;">3. Products (Optional)</span>
+                                <span class="file-label" style="font-size: 11px; font-weight: 600; margin-bottom: 4px;">3. Products (Required) *</span>
                                 <input type="file" id="dm-multi-prods-file" accept=".csv" class="form-input" style="height: 30px; font-size: 11px; padding: 2px 4px;">
                             </div>
                             <div class="multi-drop-card" style="padding: 8px 10px;">
-                                <span class="file-label" style="font-size: 11px; font-weight: 600; margin-bottom: 4px;">4. Stores (Optional)</span>
+                                <span class="file-label" style="font-size: 11px; font-weight: 600; margin-bottom: 4px;">4. Stores (Required) *</span>
                                 <input type="file" id="dm-multi-stores-file" accept=".csv" class="form-input" style="height: 30px; font-size: 11px; padding: 2px 4px;">
                             </div>
                         </div>
@@ -914,19 +915,20 @@
                     <form id="dataset-upload-form">
                         <div class="form-group" style="margin-bottom:14px;">
                             <label style="font-weight:700; font-size:13px; color:var(--text-primary); display:block; margin-bottom:4px;">
-                                Dataset Name:
+                                Dataset Name (Required) *
                             </label>
-                            <input type="text" id="upload-dataset-name" placeholder="e.g., My Retail Business 2025" class="form-input" style="width:100%;">
+                            <input type="text" id="upload-dataset-name" placeholder="e.g., My Retail Business 2026" class="form-input" style="width:100%;" required>
                         </div>
 
                         <div class="upload-mode-toggle" style="margin-bottom:14px;">
-                            <label style="font-weight:700; font-size:13px; color:var(--text-primary); display:block; margin-bottom:6px;">Upload Format:</label>
-                            <div style="display:flex; gap:16px; flex-wrap:wrap;">
+                            <label style="font-weight:700; font-size:13px; color:var(--text-primary); display:block; margin-bottom:6px;">Choose ONE Upload Method:</label>
+                            <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
                                 <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
-                                    <input type="radio" name="upload-mode" value="single" checked> Single CSV / Excel File (.xlsx, .csv)
+                                    <input type="radio" name="upload-mode" value="single" checked> Single File (.csv / .xlsx)
                                 </label>
+                                <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); background: var(--bg-subtle, #F1F5F9); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border-color, #E2E8F0);">OR</span>
                                 <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
-                                    <input type="radio" name="upload-mode" value="multi"> 4 Separate CSV Files (Sales, Inventory, Products, Stores)
+                                    <input type="radio" name="upload-mode" value="multi"> 4 Separate CSVs
                                 </label>
                             </div>
                         </div>
@@ -934,7 +936,7 @@
                         <!-- Single File Upload Zone -->
                         <div id="single-upload-zone" class="upload-dropzone">
                             <div class="dropzone-icon">📄</div>
-                            <div class="dropzone-title">Drag & drop your Retail Sales or Excel Workbook here</div>
+                            <div class="dropzone-title">Drag & drop your CSV or Excel (.xlsx) file here *</div>
                             <div class="dropzone-sub">Supports .csv, .xlsx, .xls with transactions, inventory, products & stores</div>
                             <input type="file" id="single-file-input" accept=".csv, .xlsx, .xls" style="display:none;">
                             <button type="button" class="btn-secondary" onclick="document.getElementById('single-file-input').click()" style="margin-top:10px;">
@@ -946,19 +948,19 @@
                         <!-- Multi-File Upload Zone -->
                         <div id="multi-upload-zone" class="multi-upload-grid hidden">
                             <div class="multi-drop-card">
-                                <span class="file-label">1. Sales Transactions (Required)*</span>
+                                <span class="file-label">1. Sales (Required) *</span>
                                 <input type="file" id="multi-sales-file" accept=".csv" class="form-input">
                             </div>
                             <div class="multi-drop-card">
-                                <span class="file-label">2. Inventory Levels (Optional)</span>
+                                <span class="file-label">2. Inventory (Required) *</span>
                                 <input type="file" id="multi-inv-file" accept=".csv" class="form-input">
                             </div>
                             <div class="multi-drop-card">
-                                <span class="file-label">3. Products Catalog (Optional)</span>
+                                <span class="file-label">3. Products (Required) *</span>
                                 <input type="file" id="multi-prods-file" accept=".csv" class="form-input">
                             </div>
                             <div class="multi-drop-card">
-                                <span class="file-label">4. Store Locations (Optional)</span>
+                                <span class="file-label">4. Stores (Required) *</span>
                                 <input type="file" id="multi-stores-file" accept=".csv" class="form-input">
                             </div>
                         </div>
