@@ -1,4 +1,4 @@
-TRACK_ID: PS03
+TRACK_ID=PS03
 
 ---
 
